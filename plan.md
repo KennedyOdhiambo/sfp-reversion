@@ -1,6 +1,6 @@
 # FX Level/SFP Mean-Reversion Strategy
 
-## Status: Draft v0.1 — several definitions need precision before implementation (see "Open Questions" per module)
+## Status: v0.2 — definitions resolved (see §2). Ready for phased implementation, step by step.
 
 ---
 
@@ -22,60 +22,70 @@ outright.
 
 ## 2. Definitions
 
-Each of these needs a **precise, coded definition** before implementation. Current best
-understanding below; items marked `[CONFIRM]` need sign-off before coding, since an imprecise
-definition here corrupts every downstream signal.
+Each item below is a **precise, coded definition** (resolved in the v0.2 refinement pass).
+Values marked `(tunable)` are starting points that walk-forward validation (§5/Phase 7) may
+adjust — the *logic* is fixed, only the numbers are subject to tuning.
 
-### 2.1 Level
-A significant support/resistance price point. `[CONFIRM]` detection method — candidates:
-- Swing high/low (local extrema over N bars)
-- Prior day/week high-low
-- Round numbers / psychological levels
-- Some combination, weighted
+### 2.1 Level — RESOLVED: fractal swing high/low
+A significant support/resistance price point, detected as a **fractal swing high/low**: bar
+`t` is a swing high iff its high is strictly greater than the highs of the `N = 5` bars on
+each side (mirror for lows; `N` is `(tunable)`). Swings smaller than `0.3 × ATR(14)` are
+ignored as noise `(tunable)`. Swing prices within `10 ticks` of each other merge into one
+level at their mean price `(tunable)`. A level is only *known* from bar `t + N` onward
+(swing confirmation lag — no lookahead).
 
-### 2.2 Inverse Level
-The opposing S/R level (e.g. if trading off resistance, the corresponding support). Used as a
-cross-check per the flowchart — exact role in the decision `[CONFIRM]` (informational context vs.
-hard filter).
+### 2.2 Inverse Level — RESOLVED: defines the target + a hard minimum-R:R filter
+The opposing S/R level (e.g. if trading off resistance, the corresponding support). It has two
+hard roles, not just context:
+1. It **defines the FTA** (see 2.9) — the take-profit target is the nearest opposing level.
+2. It is a **hard filter**: skip the trade when the distance to the target is less than
+   `1.0 × the stop distance` (minimum 1:1 reward:risk, `(tunable)`).
 
-### 2.3 Touch
-An approach of price to a level without a full retest/breakout event. `[CONFIRM]` tolerance
-(fixed pips vs. ATR-scaled) and what distinguishes a "touch" from a "retest" — the flowchart
-treats these as two separate counters, not one.
+### 2.3 Touch — RESOLVED: ATR-scaled proximity, forming swing counts
+An approach of price to a level: a bar whose high/low comes within `0.1 × ATR(14)` of the
+level price `(tunable)`. **The swing that formed the level counts as touch #1.** Touches and
+retests are two separate counters: the first approach is the touch; every later approach is a
+retest (see 2.4).
 
-### 2.4 Retest
-A touch occurring *after* the level has already been established/traded off once.
-`[CONFIRM]` — does the first touch that defines the level count toward the retest counter, or
-does counting start only after?
+### 2.4 Retest — RESOLVED: counting starts with the forming swing as touch #1
+A touch occurring *after* the level's establishing touch. Since the forming swing is touch #1,
+the next approach is retest #1, then retest #2, and so on. A **break** (close beyond the level
+by more than the touch tolerance) deactivates the level — no further signals off it.
 
-### 2.5 Confluence Factors
-Used to gate entries on weaker (fewer-touch) setups:
-- **D1 Bias** — daily directional bias. `[CONFIRM]` calculation (trend filter, EMA-based, discretionary macro read as in journal, or a combination)
-- **Fib Level** — level coincides with a Fibonacci retracement/extension of daily swings.
-  `[CONFIRM]` which swing points define the fib, which ratios count
-- **Level at or past ATR** — level sits at or beyond an ATR-based extension from some reference
-  point. `[CONFIRM]` reference point and ATR period/multiple
+### 2.5 Confluence Factors — RESOLVED
+Used to gate entries on weaker (fewer-touch) setups. Each factor is a yes/no verdict per bar,
+using only data available at that bar:
+- **D1 Bias** — bullish when EMA(20) > EMA(50) *and* price made higher highs over the last
+  10 bars (mirror for bearish); else neutral. Holds when the bias agrees with the trade
+  direction. (All values `(tunable)`.)
+- **Fib Level** — the level sits within `0.2 × ATR` of a Fibonacci retracement (ratios 0.382 /
+  0.5 / 0.618 / 0.786) drawn over the most recent confirmed swing high→low (or low→high).
+- **Level at or past ATR** — the level sits at least `1.0 × ATR(14)` away from the most recent
+  confirmed swing (extension = stretched, reactive territory).
 
-### 2.6 SFP (Swing Failure Pattern)
+### 2.6 SFP (Swing Failure Pattern) — RESOLVED
 Price wicks beyond the level, then closes back inside it — a liquidity sweep signaling
-exhaustion of the breakout attempt. `[CONFIRM]`:
-- Minimum wick distance beyond level (fixed pips / ATR fraction)
-- How "solidly" the close must be back inside (e.g. close must clear the level by X, not just
-  barely inside)
+exhaustion of the breakout attempt. Long setup: the bar wicks below the level by at least
+`0.1 × ATR` **and** closes back above the level by at least `0.05 × ATR` (mirror for shorts).
+Both thresholds `(tunable)`.
 
-### 2.7 MACD Divergence (over prior 3 lows/highs)
-Standard MACD divergence, scoped specifically to the prior 3 swing lows (for bullish) or highs
-(for bearish). `[CONFIRM]` MACD parameters (12/26/9 standard, or custom) and exact divergence
-detection logic (price vs. MACD histogram or MACD line).
+### 2.7 MACD Divergence (over prior 3 lows/highs) — RESOLVED
+Standard parameters 12/26/9, divergence read on the **histogram** (MACD line − signal line).
+Bullish: over the prior 3 confirmed swing lows, price makes a lower low while the histogram
+makes a higher low (mirror for bearish). Only swings confirmed at least `swing_lookback` bars
+before the current bar may be used (no lookahead).
 
-### 2.8 Thrust Candle
-The candle that "confirms" the level / triggers stop placement. `[CONFIRM]` — is this the
-candle that formed the SFP wick, or a separate momentum/impulse candle definition (size
-threshold relative to ATR, engulfing, etc.)?
+### 2.8 Thrust Candle — RESOLVED: the signal bar itself
+The candle that triggers stop placement is the **signal bar** (the bar on which all gates
+pass — typically the bar that printed the SFP wick). The stop goes beyond that bar's extreme
+(high for shorts, low for longs) plus a `0.1 × ATR` buffer `(tunable)`. No separate
+momentum/engulfing definition.
 
-### 2.9 FTA (First Target Area)
-Take-profit target. `[CONFIRM]` calculation — likely the next opposing S/R level, but needs
-precise identification logic matching section 2.1's level detection.
+### 2.9 FTA (First Target Area) — RESOLVED: nearest opposing level
+Take-profit target = the **nearest opposing level** from the same §2.1 detection (nearest
+resistance above for longs, nearest support below for shorts). Fallback when none exists:
+`entry ± 2.0 × ATR`. Combined with the §2.2 minimum-1:1 filter, no trade is taken without a
+defined, worthwhile target.
 
 ---
 
@@ -118,10 +128,11 @@ Special rule:
   at the fib level instead of the raw S/R level.
 ```
 
-`[CONFIRM]`: How do the Touches branch and Retests branch combine? Read of the flowchart is that
-both gates must pass (AND logic) — e.g. a 1-touch level needing 2 confluence factors AND (if it
-also has retests) satisfying the retest-based SFP/MACD requirement. This needs explicit
-confirmation since it materially changes signal frequency.
+**RESOLVED — gate combination: AND logic.** Both gates must pass: a setup needs its
+touch-based confluence count AND its retest-based confirmation (SFP / SFP+MACD). A level with
+0 retests uses only the touch gate; retests add confirmation on top, never replace the
+confluence requirement. Retest counts above 2 exhaust the level (pass). The Inverse Level is
+not a third gate — its role is target + minimum-R:R filter per §2.2.
 
 ---
 
@@ -131,8 +142,8 @@ confirmation since it materially changes signal frequency.
   precisely, see 2.9/special rule above)
 - **Stop**: Beyond the thrust candle
 - **Target**: FTA (First Target Area)
-- **Position sizing**: not yet specified — `[TODO]` decide fixed-fractional vs. fixed-risk-per-trade
-  before backtest produces meaningful equity curves
+- **Position sizing**: fixed-fractional, risking **1.0% of equity per trade** `(tunable)`.
+  Units = risk amount ÷ stop distance. One open position at a time.
 
 ---
 
@@ -180,73 +191,114 @@ mistaken for a real trading edge.
 
 ---
 
-## 6. Implementation Plan
+## 6. Implementation Plan (v0.2)
 
-### Phase 0 — Project setup (done)
-- `uv` project, Python 3.12
-- Core deps: pandas, numpy, scipy, matplotlib, pyarrow
-- Dev deps: ruff, jupyter
+House rules for every phase:
+- **One phase at a time.** A phase is finished only when its Definition of Done holds.
+- **Tests per phase.** `pytest` must be green before the next phase starts.
+- **Config, not hardcoding.** Every `(tunable)` number lives in `config.yaml`.
+- **No lookahead.** Any output at bar `t` may use only data available at or before `t`.
+- **One commit per phase.** "Which code + config produced this result" must stay answerable.
+- Unit tests may use tiny hand-made OHLC frames; anything resembling a backtest result must
+  use real data (§5).
 
-### Phase 1 — Data pipeline
-- `src/data/loader.py` — real OHLC ingestion (broker/data API — TBD which source), Parquet
-  local caching, no re-fetch on every run
-- `src/data/schema.py` — canonical OHLC DataFrame contract (columns, index, timezone handling)
-  every downstream module assumes
+### Phase 0 — Project setup
+- `uv` project, Python 3.12; core deps pandas/numpy/scipy/matplotlib/pyarrow/pyyaml; dev deps
+  pytest/ruff.
+- `config.yaml` holding every `(tunable)` number from §2; empty `src/sfp_reversion` package.
+- Done when: `uv sync` succeeds, `pytest` collects (0 tests), config loads.
 
-### Phase 2 — Level detection primitives
-- `src/levels/detection.py` — swing high/low or chosen level-detection method (2.1)
-- `src/levels/touches.py` — touch counter (2.3)
-- `src/levels/retests.py` — retest counter (2.4)
-- Unit tests against hand-labeled real chart examples (pick a handful of known historical
-  levels from your journal/memory, assert the counters match what you'd count manually)
+### Phase 1 — OHLC schema (the contract)
+- `src/sfp_reversion/data/schema.py` — canonical frame: UTC DatetimeIndex named `timestamp`,
+  float columns `open/high/low/close/volume`; validate/normalize, concat, empty helpers.
+- Done when: unit tests pass — good frames accepted; bad frames (naive timezone, duplicate
+  timestamps, high<low, missing columns) rejected.
 
-### Phase 3 — Confluence factor modules
-- `src/confluence/d1_bias.py`
-- `src/confluence/fib_levels.py`
-- `src/confluence/atr_extension.py`
-- Each independently unit-testable against known chart examples
+### Phase 2 — Data loader, local first (OANDA later)
+- `src/sfp_reversion/data/loader.py` — load local CSV/Parquet files into the canonical frame,
+  plus the parquet cache layout. OANDA fetching becomes Phase 2b once API creds exist; nothing
+  downstream waits for it.
+- Done when: a real sample file loads, validates, and reloads from cache without re-reading.
 
-### Phase 4 — Entry confirmation
-- `src/confirmation/sfp.py` — SFP detector (2.6)
-- `src/confirmation/macd_divergence.py` — divergence over prior 3 lows/highs (2.7)
+### Phase 3 — Swing + level detection (§2.1)
+- `src/sfp_reversion/levels/detection.py` — fractal swings (N=5 bars each side, min 0.3×ATR
+  magnitude) clustered within 10 ticks into levels at their mean price; a level is only known
+  from its confirmation bar onward.
+- Done when: detected levels match hand-counted levels on 2–3 hand-labeled real-chart excerpts.
 
-### Phase 5 — Signal assembly
-- `src/signals/decision_tree.py` — wires phases 2–4 into the full decision tree from Section 3
-- Pure function(s) on OHLC + detected levels → entry/direction/stop/target columns
-- No lookahead: every signal at bar *t* uses only data available at or before *t*'s decision
-  point (same discipline as the original Donchian module, carried forward)
+### Phase 4 — Touch / retest counters (§2.3, §2.4)
+- Touch = bar within 0.1×ATR of the level; the forming swing is touch #1; later approaches
+  are retests; a close beyond tolerance = break (level dead).
+- In `src/sfp_reversion/levels/` alongside detection.
+- Done when: counters match hand counts on labeled excerpts, including one break case and one
+  3-retest exhaustion case.
 
-### Phase 6 — Backtest engine (extend existing)
-- Existing `src/backtest.py` engine (built earlier) gets adapted: limit-order fill logic
-  (not market-order-next-open like the Donchian version), stop/target-based exits instead of
-  signal-flip exits, realistic spread/slippage per pair
-- `src/backtest/fills.py` — limit order fill simulation (did price actually reach the level;
-  same-bar fill ambiguity handling)
+### Phase 5 — D1 bias (§2.5)
+- `src/sfp_reversion/confluence/d1_bias.py` — EMA20/50 + 10-bar confirmation; output in
+  {−1, 0, +1}; matcher for trade direction.
+- Done when: unit tests on trending, ranging, and trend-flip cases.
 
-### Phase 6a — Falsification test (real-data randomization)
-- `src/validation/random_baseline.py` — random-entry / shuffled-signal baseline using the
-  Phase 6 backtest engine on real data
-- Must run and pass (baseline shows no real edge) before Phase 6's engine is trusted for
-  evaluating the actual strategy signals from Phase 5
+### Phase 6 — Fib levels (§2.5 + special limit rule)
+- `src/sfp_reversion/confluence/fib_levels.py` — retracements of the most recent confirmed
+  swing (0.382/0.5/0.618/0.786), proximity 0.2×ATR, fib-override price for limit placement.
+- Done when: levels match hand-computed fibs on a known swing; override triggers only within
+  proximity.
 
-### Phase 7 — Validation framework
-- `src/validation/walk_forward.py` — rolling in-sample/out-of-sample split
-- `src/validation/significance.py` — Sharpe confidence intervals, deflated Sharpe ratio,
-  minimum-sample-size checks
-- `src/validation/sensitivity.py` — parameter sensitivity sweep (is the edge robust to small
-  threshold changes, or a knife-edge artifact of one specific parameter value)
+### Phase 7 — ATR extension (§2.5)
+- `src/sfp_reversion/confluence/atr_extension.py` — level ≥ 1.0×ATR(14) from the recent-swing
+  reference.
+- Done when: true/false cases verified on hand-picked bars.
 
-### Phase 8 — Journal cross-check
-- `src/journal/schema.py` — structured schema for digitized journal data (per earlier
-  discussion: date, pair, bias, touches, retests, confluence_factors, execution_level, executed,
-  exit_type, pnl, macro_thesis, why_note)
-- `src/journal/compare.py` — align coded system's historical signals against real logged trades
-  by date/pair, report agreement/divergence
+### Phase 8 — SFP detector (§2.6)
+- `src/sfp_reversion/confirmation/sfp.py` — wick ≥ 0.1×ATR beyond the level, close ≥ 0.05×ATR
+  back inside, per direction.
+- Done when: textbook SFP bars detected; near-misses (wick too short, close barely inside)
+  rejected.
 
-### Phase 9 — Reporting
-- `src/report/equity_curve.py`, `src/report/metrics_table.py` — plots and tables assembled
-  from validation output; this is what actually gets reviewed after each backtest run, not raw
-  DataFrames
+### Phase 9 — MACD divergence (§2.7)
+- `src/sfp_reversion/confirmation/macd_divergence.py` — 12/26/9 histogram divergence over the
+  prior 3 confirmed swings, no lookahead.
+- Done when: a known historical divergence flags true; a non-divergent lower-low stays false.
+
+### Phase 10 — Decision-tree assembly (§3)
+- `src/sfp_reversion/signals/decision_tree.py` — Phases 3–9 wired with AND gates, the §2.2
+  minimum-1:1 R:R filter, FTA targets, and fib-override limits. Pure function: OHLC → signal
+  table (timestamp, direction, limit, stop, target, touches, retests, factors…).
+- Done when: integration test on a small fixed real-data slice produces hand-verified rows,
+  including a lookahead probe (no signal may reference future bars).
+
+### Phase 11 — Backtest engine
+- `src/sfp_reversion/backtest/` — limit-order fills from bar t+1, stop-first exit priority,
+  spread+slippage costs, 1%-risk sizing, one position at a time, per-trade table + equity curve.
+- Done when: a hand-worked 2-trade scenario reproduces exact fills and PnL, with costs visibly
+  applied.
+
+### Phase 12 — Falsification gate (§5a)
+- `src/sfp_reversion/validation/random_baseline.py` — random-entry baseline on the same engine
+  and data must show no edge. If it shows profit, the engine has a bug: fix it before Phase 13.
+- Done when: baseline prints loss/insignificance and an explicit PASS/FAIL verdict.
+
+### Phase 13 — Validation framework
+- `src/sfp_reversion/validation/` — walk-forward (in-sample tune / out-of-sample judge),
+  Sharpe confidence + deflated Sharpe, parameter sensitivity sweep.
+- Done when: runs end-to-end on real data and reports "robust vs knife-edge" per parameter.
+
+### Phase 14 — Reporting
+- `src/sfp_reversion/report/` — equity-curve plot + metrics table built from validation output.
+- Done when: one command produces the plot + table a human actually reviews.
+
+### Phase 15 — Journal cross-check (deferred)
+- Needs your digitized 2022–23 journal as input. `src/sfp_reversion/journal/` — schema + compare
+  report aligning coded signals against logged trades by date/pair.
+- Done when: agreement/divergence report runs on real journal rows.
+
+### Phase 16 — CLI wiring
+- `fetch / signals / backtest / validate / journal` commands tying all phases together.
+- Done when: each command runs end-to-end from a clean cache.
+
+### Phase 2b — OANDA fetch (whenever creds exist)
+- Live fetch into the same cache Phase 2 defines. Independent of Phases 3–16, which only ever
+  read the cache.
 
 ---
 
@@ -275,7 +327,11 @@ mistaken for a real trading edge.
 
 ## 8. Immediate Next Steps
 
-1. Resolve `[CONFIRM]` items in Section 2 — these block correct implementation of every module
-2. Decide real data source or Phase 1 (broker/API) — needed before any module beyond signal
+1. ~~Resolve `[CONFIRM]` items in Section 2~~ — done in v0.2 (all §2 items resolved;
+   numbers marked `(tunable)` go through walk-forward, never hand-tuned on full history)
+2. Confirm real data source for Phase 1 (default: OANDA practice + local parquet cache;
+   needs `SFP_OANDA_TOKEN` / `SFP_OANDA_ACCOUNT_ID`) — needed before any module beyond signal
    logic can be tested against real data
-3. Begin Phase 2 (level detection) once 2.1/2.3/2.4 are confirmed
+3. Work the phases in order starting at Phase 0 — each phase's Definition of Done holds
+   before the next begins. Reference (not copy-paste) implementation lives on branch
+   `archive/full-implementation-20260905`; we rebuild for understanding.

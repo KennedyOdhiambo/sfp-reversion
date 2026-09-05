@@ -1,17 +1,37 @@
 [project]
 name = "sfp-reversion"
 version = "0.1.0"
-description = "Add your description here"
+description = "FX level / SFP mean-reversion strategy: backtest engine, validation framework, and journal cross-check."
 readme = "README.md"
-authors = [
-    { name = "Kennedy Odhiambo", email = "x.johnkennedy.x@gmail.com" }
-]
+authors = [{ name = "Kennedy Odhiambo", email = "x.johnkennedy.x@gmail.com" }]
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "numpy>=2.0",
+    "pandas>=2.2",
+    "scipy>=1.13",
+    "matplotlib>=3.8",
+    "pyarrow>=16.0",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "ruff>=0.4"]
 
 [project.scripts]
-sfp-reversion = "sfp_reversion:main"
+sfp-reversion = "sfp_reversion.cli:main"
 
 [build-system]
 requires = ["uv_build>=0.12.5,<0.13.0"]
 build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501"]
