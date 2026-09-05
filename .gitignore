@@ -12,5 +12,8 @@ wheels/
 # Local data cache (real OHLC parquet files, re-fetchable, never commit)
 data/
 
+# Jupyter checkpoints
+.ipynb_checkpoints/
+
 # Reports and plots (generated artifacts)
 reports/

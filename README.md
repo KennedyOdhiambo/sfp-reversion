@@ -79,6 +79,15 @@ uvx ruff check src tests              # lint
 uvx ruff format --check src tests     # formatting
 ```
 
+## Research notebooks
+
+```bash
+uv run jupyter lab                # open notebooks/explore.ipynb
+```
+
+Price + levels + signals + trades on one chart, parameterized by pair and dates.
+Notebooks import the same modules as the CLI — exploration here, verdicts there.
+
 ## Configuration
 
 All strategy numbers live in `config.yaml` and are read at runtime — tune config,

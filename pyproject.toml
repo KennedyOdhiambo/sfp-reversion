@@ -16,7 +16,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "ruff>=0.4"]
+dev = ["pytest>=8.0", "ruff>=0.4", "jupyterlab>=4.0"]
 
 [project.scripts]
 sfp-reversion = "sfp_reversion.cli:main"
