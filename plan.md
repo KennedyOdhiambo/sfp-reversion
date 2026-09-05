@@ -155,10 +155,6 @@ not a third gate — its role is target + minimum-R:R filter per §2.2.
   in-sample window for tuning, out-of-sample window for judging — never the same data for both.
 - **Statistical significance check required before any result is treated as evidence of edge** —
   trade count, confidence interval on Sharpe, sensitivity to small parameter changes.
-- **Journal cross-check**: once the 2022–2023 hardcopy journal is digitized, the coded system's
-  historical signals get compared against actual logged trades from that period. Divergence is
-  informative either way — reveals either an implementation gap or undocumented discretionary
-  judgment in the original trading.
 
 ---
 
@@ -298,13 +294,8 @@ House rules for every phase:
 - `src/sfp_reversion/report/` — equity-curve plot + metrics table built from validation output.
 - Done when: one command produces the plot + table a human actually reviews.
 
-### Phase 15 — Journal cross-check (deferred)
-- Needs your digitized 2022–23 journal as input. `src/sfp_reversion/journal/` — schema + compare
-  report aligning coded signals against logged trades by date/pair.
-- Done when: agreement/divergence report runs on real journal rows.
-
-### Phase 16 — CLI wiring
-- `fetch / signals / backtest / validate / journal` commands tying all phases together.
+### Phase 15 — CLI wiring
+- `fetch / signals / backtest / validate` commands tying all phases together.
 - Done when: each command runs end-to-end from a clean cache.
 
 ---
