@@ -8,6 +8,8 @@ from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pandas as pd
+
 from sfp_reversion.backtest.engine import BacktestParams, run_backtest
 from sfp_reversion.config import get_config, setup_logging
 from sfp_reversion.data.loader import load_ohlc
@@ -34,12 +36,16 @@ def _parser() -> argparse.ArgumentParser:
     s = sub.add_parser("signals", help="Generate decision-tree signals")
     s.add_argument("pair")
     s.add_argument("--out", default=None, help="CSV output path")
+    s.add_argument("--start", default=None, help="YYYY-MM-DD")
+    s.add_argument("--end", default=None, help="YYYY-MM-DD")
 
     b = sub.add_parser("backtest", help="Backtest + random-baseline gate")
     b.add_argument("pair")
     b.add_argument("--n-baseline", type=int, default=20)
     b.add_argument("--seed", type=int, default=0)
     b.add_argument("--out-dir", default=None)
+    b.add_argument("--start", default=None, help="YYYY-MM-DD")
+    b.add_argument("--end", default=None, help="YYYY-MM-DD")
 
     v = sub.add_parser("validate", help="Walk-forward + optional parameter sweep")
     v.add_argument("pair")
@@ -47,6 +53,8 @@ def _parser() -> argparse.ArgumentParser:
     v.add_argument("--values", nargs="+", type=float, default=None)
     v.add_argument("--is-years", type=float, default=None)
     v.add_argument("--oos-years", type=float, default=None)
+    v.add_argument("--start", default=None, help="YYYY-MM-DD")
+    v.add_argument("--end", default=None, help="YYYY-MM-DD")
     return p
 
 
@@ -54,10 +62,17 @@ def _dt(value: str | None) -> datetime | None:
     return datetime.strptime(value, "%Y-%m-%d").replace(tzinfo=UTC) if value else None
 
 
-def _frames(pair: str, granularity: str, start: str | None, end: str | None) -> tuple:
-    hourly = load_ohlc(pair, _dt(start), _dt(end), granularity=granularity or "H1")
-    daily = load_ohlc(pair, _dt(start), _dt(end))
-    return hourly, daily
+def _frames(pair: str) -> tuple:
+    """Full history always: indicators and levels need their warmup."""
+    return load_ohlc(pair, granularity="H1"), load_ohlc(pair)
+
+
+def _in_window(sig, start: str | None, end: str | None):
+    if start:
+        sig = sig[sig["timestamp"] >= _dt(start)]
+    if end:
+        sig = sig[sig["timestamp"] < _dt(end) + pd.Timedelta(days=1)]
+    return sig
 
 
 def _cmd_fetch(args: argparse.Namespace) -> int:
@@ -67,8 +82,8 @@ def _cmd_fetch(args: argparse.Namespace) -> int:
 
 
 def _cmd_signals(args: argparse.Namespace) -> int:
-    hourly, daily = _frames(args.pair, "H1", None, None)
-    sig = generate_signals(hourly, daily)
+    hourly, daily = _frames(args.pair)
+    sig = _in_window(generate_signals(hourly, daily), args.start, args.end)
     print(f"{len(sig)} signals")
     if not sig.empty:
         print(sig.to_string())
@@ -80,9 +95,9 @@ def _cmd_signals(args: argparse.Namespace) -> int:
 
 def _cmd_backtest(args: argparse.Namespace) -> int:
     cfg = get_config()
-    hourly, daily = _frames(args.pair, "H1", None, None)
+    hourly, daily = _frames(args.pair)
     params = BacktestParams.from_config()
-    sig = generate_signals(hourly, daily)
+    sig = _in_window(generate_signals(hourly, daily), args.start, args.end)
     res = run_backtest(hourly, sig, params)
     print(metrics_table(res.trades_df, res.equity_curve, params.min_equity).to_string(index=False))
     out_dir = Path(args.out_dir or cfg.get("report.output_dir", "reports"))
@@ -97,7 +112,7 @@ def _cmd_backtest(args: argparse.Namespace) -> int:
 def _cmd_validate(args: argparse.Namespace) -> int:
     cfg = get_config()
     wf = cfg.section("validation").get("walk_forward", {})
-    hourly, daily = _frames(args.pair, "H1", None, None)
+    hourly, daily = _frames(args.pair)
     params, bt = DecisionTreeParams.from_config(), BacktestParams.from_config()
 
     if args.parameter:
@@ -131,6 +146,8 @@ def _cmd_validate(args: argparse.Namespace) -> int:
         score_fn,
         args.is_years or float(wf.get("in_sample_years", 0.75)),
         args.oos_years or float(wf.get("out_of_sample_years", 0.25)),
+        _dt(args.start).tz_convert("UTC") if args.start else None,
+        _dt(args.end).tz_convert("UTC") if args.end else None,
     )
     if not res:
         print("no walk-forward windows in range")

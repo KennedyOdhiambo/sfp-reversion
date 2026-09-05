@@ -43,6 +43,8 @@ def walk_forward_evaluate(
     score_fn: ScoreFn,
     in_sample_years: float = 0.75,
     out_of_sample_years: float = 0.25,
+    start: pd.Timestamp | None = None,
+    end: pd.Timestamp | None = None,
 ) -> list[WindowResult]:
     ist = pd.Timedelta(days=365.25 * in_sample_years)
     oost = pd.Timedelta(days=365.25 * out_of_sample_years)
@@ -50,6 +52,10 @@ def walk_forward_evaluate(
     for is_start, is_end, oos_start, oos_end in walk_forward_windows(
         hourly.index[0], hourly.index[-1], ist, oost
     ):
+        if start is not None and oos_end <= start:
+            continue
+        if end is not None and oos_start >= end:
+            continue
         oos_h = hourly[(hourly.index >= oos_start) & (hourly.index < oos_end)]
         oos_d = daily[(daily.index >= oos_start) & (daily.index < oos_end)]
         if oos_h.empty:
