@@ -212,12 +212,13 @@ House rules for every phase:
 - Done when: unit tests pass — good frames accepted; bad frames (naive timezone, duplicate
   timestamps, high<low, missing columns) rejected.
 
-### Phase 2 — Data loader (Yahoo + cache)
-- `src/sfp_reversion/data/loader.py` — pull real OHLC from Yahoo Finance chart API (keyless,
-  global; OANDA onboarding excludes Kenya, Stooq is bot-walled). One bulk request per pair
-  (daily history to ~2003), merged into a local parquet cache
-  (`data/cache/{pair}_{granularity}.parquet`). Never re-fetch cached ranges; network failure
-  degrades to cache with a warning (hard error only when the cache is empty too). No creds.
+### Phase 2 — Data loader (TradingView + cache)
+- `src/sfp_reversion/data/loader.py` — pull real OHLC from TradingView's websocket feed
+  (OANDA venue, keyless for light use). Per-pull cap is 5000 bars (daily back to 2007, H4 to 2023, H1 ~7 months), merged into a
+  local parquet cache (`data/cache/{pair}_{granularity}.parquet`). Never re-fetch cached
+  ranges; network failure degrades to cache with a warning (hard error only when the cache
+  is empty too). No creds required unless authenticated TV access is wanted
+  (`TV_USERNAME` / `TV_PASSWORD` env vars).
 - Done when: a live fetch for one pair loads, validates, caches, and reloads from cache;
   unit tests with a stub fetcher cover merging, slicing, and corrupt-cache recovery.
 
@@ -327,7 +328,7 @@ House rules for every phase:
 
 1. ~~Resolve `[CONFIRM]` items in Section 2~~ — done in v0.2 (all §2 items resolved;
    numbers marked `(tunable)` go through walk-forward, never hand-tuned on full history)
-2. ~~Data source~~ — Yahoo Finance (keyless, works from Kenya) decided in Phase 2; no creds.
+2. ~~Data source~~ — TradingView feed (OANDA venue) decided in Phase 2; no creds.
 3. Work the phases in order starting at Phase 0 — each phase's Definition of Done holds
    before the next begins. Reference (not copy-paste) implementation lives on branch
    `archive/full-implementation-20260905`; we rebuild for understanding.

@@ -3,6 +3,7 @@
 Systematic version of a discretionary FX strategy: fade key support/resistance levels,
 confirmed by Swing Failure Patterns (SFP) and MACD divergence. Daily chart decides
 *where* (levels, trend bias); hourly chart decides *when* (touches, triggers, entries).
+Price data: TradingView feed (OANDA venue).
 
 Core thesis: levels tested fewer times reverse more reliably than exhausted ones.
 Touch count grades the setup; retest count gates the confirmation; both gates must pass.
@@ -10,7 +11,7 @@ Touch count grades the setup; retest count gates the confirmation; both gates mu
 ## Pipeline
 
 ```
-Yahoo Finance → cache → daily levels → hourly touch/retest tracking
+TradingView feed → cache → daily levels → hourly touch/retest tracking
   → confluence votes (D1 bias, fib, ATR stretch) → SFP / MACD confirmation
   → decision tree (orders: limit/stop/target) → backtest engine
   → falsification gate → walk-forward / significance / sensitivity → reports
@@ -27,7 +28,7 @@ config.yaml                  # every tunable number (strategy never hardcodes)
 plan.md                      # strategy spec + phased build plan (source of truth)
 src/sfp_reversion/
   config.py                  # typed config reader
-  data/                      # OHLC schema (the contract) + Yahoo loader + parquet cache
+  data/                      # OHLC schema (the contract) + TradingView loader + parquet cache
   levels/                    # swing detection, level clustering, touch/retest timelines
   confluence/                # d1_bias, fib_levels, atr_extension
   confirmation/              # sfp, macd_divergence
@@ -67,8 +68,8 @@ uv run sfp-reversion validate EUR_USD --start 2025-01-01 --end 2025-12-31
 uv run sfp-reversion validate EUR_USD --parameter touch_tolerance_atr --values 0.05 0.1 0.15 0.2
 ```
 
-Any Yahoo-covered pair works (`EUR_USD`, `GBP_USD`, `USD_JPY`, …); add odd symbols
-to `data.yahoo.symbols` in `config.yaml`. Each pair/timeframe caches separately.
+Any TradingView-covered pair works (`EUR_USD`, `GBP_USD`, `USD_JPY`, …); add odd symbols
+to `data.tradingview.symbols` in `config.yaml`. Each pair/timeframe caches separately.
 
 ## Test
 

@@ -2,21 +2,21 @@
 # Every parameter in this file is a candidate for walk-forward sweeps (plan.md §5/Phase 13).
 
 data:
-  source: yahoo              # yahoo (keyless, global)
   cache_dir: data/cache      # parquet cache, relative to project root
-  yahoo:
-    granularity: D           # D | W | M | H1
-    symbols:                 # pair -> Yahoo symbol (convention: EUR_USD -> EURUSD=X)
-      EUR_USD: EURUSD=X
-      GBP_USD: GBPUSD=X
-      USD_JPY: JPY=X
-      USD_CHF: CHF=X
-      AUD_USD: AUDUSD=X
-      USD_CAD: CAD=X
-      NZD_USD: NZDUSD=X
-      EUR_GBP: EURGBP=X
-      EUR_JPY: EURJPY=X
-      GBP_JPY: GBPJPY=X
+  tradingview:
+    granularity: D           # D | W | M | H4 | H1 (5000 bars/pull: D->2007, H4->2023, H1->~7mo)
+    exchange: OANDA          # default venue; per-pair overrides below
+    symbols:                 # pair -> [tv_symbol, exchange]
+      EUR_USD: [EURUSD, OANDA]
+      GBP_USD: [GBPUSD, OANDA]
+      USD_JPY: [USDJPY, OANDA]
+      USD_CHF: [USDCHF, OANDA]
+      AUD_USD: [AUDUSD, OANDA]
+      USD_CAD: [USDCAD, OANDA]
+      NZD_USD: [NZDUSD, OANDA]
+      EUR_GBP: [EURGBP, OANDA]
+      EUR_JPY: [EURJPY, OANDA]
+      GBP_JPY: [GBPJPY, OANDA]
 
 levels:
   swing_lookback: 5          # fractal swing window (bars each side)

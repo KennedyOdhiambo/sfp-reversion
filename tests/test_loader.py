@@ -1,4 +1,4 @@
-"""Phase 2 tests: loader caching/slicing plus Yahoo parsing — no network."""
+"""Phase 2 tests: loader caching/slicing plus TradingView parsing — no network."""
 
 from datetime import UTC, datetime
 from pathlib import Path
@@ -7,7 +7,7 @@ from typing import Any
 import pandas as pd
 import pytest
 
-from sfp_reversion.data.loader import _parse_yahoo, cache_path, load_ohlc, yahoo_symbol
+from sfp_reversion.data.loader import _parse_tradingview, cache_path, load_ohlc, tv_symbol
 from sfp_reversion.data.schema import empty_ohlc
 
 
@@ -90,41 +90,28 @@ def test_corrupt_cache_is_rebuilt(tmp_path: Path) -> None:
 
 
 def test_symbol_mapping_defaults_and_overrides() -> None:
-    assert yahoo_symbol("EUR_USD") == "EURUSD=X"
-    assert yahoo_symbol("USD_JPY") == "JPY=X"  # from config.yaml symbols
+    assert tv_symbol("EUR_USD") == ("EURUSD", "OANDA")
+    assert tv_symbol("USD_JPY") == ("USDJPY", "OANDA")
     with pytest.raises(ValueError, match="EUR_USD"):
-        yahoo_symbol("EURUSD")
+        tv_symbol("EURUSD")
 
 
-def test_parse_yahoo_drops_null_rows() -> None:
-    payload = {
-        "chart": {
-            "result": [
-                {
-                    "timestamp": [1704067200, 1704153600, 1704240000],
-                    "indicators": {
-                        "quote": [
-                            {
-                                "open": [1.1, None, 1.2],
-                                "high": [1.11, None, 1.21],
-                                "low": [1.09, None, 1.19],
-                                "close": [1.105, None, 1.205],
-                                "volume": [0, 0, 0],
-                            }
-                        ]
-                    },
-                }
-            ]
-        }
-    }
-    out = _parse_yahoo(payload)
-    assert len(out) == 2
-    assert out.index[0] == pd.Timestamp("2024-01-01", tz="UTC")
-
-
-def test_parse_yahoo_empty_result_raises() -> None:
-    with pytest.raises(RuntimeError, match="no data"):
-        _parse_yahoo({"chart": {"result": None, "error": {"code": "Not Found"}}})
+def test_parse_tradingview_frame() -> None:
+    raw = pd.DataFrame(
+        {
+            "symbol": ["OANDA:EURUSD"] * 3,
+            "open": [1.10, 1.11, None],
+            "high": [1.11, 1.12, 1.13],
+            "low": [1.09, 1.10, 1.11],
+            "close": [1.105, 1.115, 1.12],
+            "volume": [100.0, 200.0, 300.0],
+        },
+        index=pd.DatetimeIndex(["2024-01-01", "2024-01-02", "2024-01-03"]),
+    )
+    out = _parse_tradingview(raw)
+    assert len(out) == 2  # null-OHLC row dropped
+    assert str(out.index.tz) == "UTC"
+    assert out["volume"].iloc[0] == 100.0
 
 
 def test_granularity_override_uses_separate_cache(tmp_path: Path) -> None:
