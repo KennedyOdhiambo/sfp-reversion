@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import numpy as np
 import pandas as pd
 
 from sfp_reversion.levels.detection import Level, atr_series
@@ -27,18 +28,8 @@ class LevelEvent:
 
 def count_touches(level: Level, df: pd.DataFrame, tolerance_atr: float) -> int:
     """Approach bars from formation until a break, minimum 1 (the forming swing)."""
-    atr = atr_series(df).shift(1).to_numpy()
-    n = 0
-    for i in range(len(df)):
-        if df.index[i] < level.formed_at or not atr[i] > 0:
-            continue
-        tol = tolerance_atr * atr[i]
-        close = float(df["close"].iloc[i])
-        if _broke(level, close, tol):
-            break
-        if _approached(level, float(df["high"].iloc[i]), float(df["low"].iloc[i]), tol):
-            n += 1
-    return max(n, 1)
+    approached, _, _, _ = _classify(level, df, tolerance_atr)
+    return max(int(approached.sum()), 1)
 
 
 def retest_events(
@@ -48,27 +39,60 @@ def retest_events(
     retest_start: str = "first_touch",
 ) -> list[LevelEvent]:
     """Full touch/retest/break timeline for one level, oldest first."""
-    atr = atr_series(df).shift(1).to_numpy()
+    approached, broke, base, closes = _classify(level, df, tolerance_atr)
     events: list[LevelEvent] = []
     seen_touch = retest_start == "first_touch"
     retest_count = 0
-    for i in range(len(df)):
-        ts = df.index[i]
-        if ts < level.formed_at or not atr[i] > 0:
-            continue
-        close = float(df["close"].iloc[i])
-        tol = tolerance_atr * atr[i]
-        if _broke(level, close, tol):
-            events.append(LevelEvent(ts, "break", close, retest_count))
-            break
-        if _approached(level, float(df["high"].iloc[i]), float(df["low"].iloc[i]), tol):
-            if not seen_touch:
-                events.append(LevelEvent(ts, "touch", close, retest_count))
-                seen_touch = True
-            else:
-                retest_count += 1
-                events.append(LevelEvent(ts, "retest", close, retest_count))
+    for rel in np.where(approached)[0]:
+        if not seen_touch:
+            events.append(
+                LevelEvent(
+                    df.index[base + int(rel)], "touch", float(closes[int(rel)]), retest_count
+                )
+            )
+            seen_touch = True
+        else:
+            retest_count += 1
+            events.append(
+                LevelEvent(
+                    df.index[base + int(rel)], "retest", float(closes[int(rel)]), retest_count
+                )
+            )
+    if broke.any():
+        rel = int(np.where(broke)[0][0])
+        events.append(LevelEvent(df.index[base + rel], "break", float(closes[rel]), retest_count))
     return events
+
+
+def _classify(
+    level: Level, df: pd.DataFrame, tolerance_atr: float
+) -> tuple[np.ndarray, np.ndarray, int, np.ndarray]:
+    """Vectorized verdicts from formation onward.
+
+    ``approached`` is True only before the first break; a break bar counts as
+    break, never as approach. Identical outcomes to the old per-bar loop.
+    """
+    n = len(df)
+    base = int(df.index.searchsorted(level.formed_at))
+    if base >= n:
+        empty = np.zeros(0, dtype=bool)
+        return empty, empty, base, np.zeros(0)
+    avals = atr_series(df).shift(1).to_numpy(dtype=float)[base:]
+    tol = tolerance_atr * avals
+    valid = np.isfinite(tol) & (tol > 0)
+    highs = df["high"].to_numpy(dtype=float)[base:]
+    lows = df["low"].to_numpy(dtype=float)[base:]
+    closes = df["close"].to_numpy(dtype=float)[base:]
+    if level.kind == "resistance":
+        approached = valid & (highs >= level.price - tol)
+        broke = valid & (closes > level.price + tol)
+    else:
+        approached = valid & (lows <= level.price + tol)
+        broke = valid & (closes < level.price - tol)
+    if broke.any():
+        approached = approached.copy()
+        approached[int(np.where(broke)[0][0]) :] = False
+    return approached, broke, base, closes
 
 
 def _approached(level: Level, high: float, low: float, tol: float) -> bool:

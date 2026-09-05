@@ -20,7 +20,7 @@ from sfp_reversion.config import get_config
 from sfp_reversion.confirmation import detect_sfp, macd_divergence
 from sfp_reversion.confluence import atr_extension, d1_bias
 from sfp_reversion.confluence.fib_levels import fib_grid, fib_override_price, near_fib
-from sfp_reversion.levels.detection import atr_series, detect_levels
+from sfp_reversion.levels.detection import atr_series, detect_levels, swing_points
 from sfp_reversion.levels.touches import approach_episodes, retest_events
 
 
@@ -127,6 +127,7 @@ def generate_signals(
     fib_h = fib_h.reindex(hourly.index, method="ffill")
 
     atr_h = atr_series(hourly, params.atr_period).shift(1)
+    swings_h = swing_points(hourly, 5, params.atr_period, min_magnitude_atr=0.0)
     macd_long = macd_divergence(
         hourly,
         "long",
@@ -182,6 +183,7 @@ def generate_signals(
             params.atr_ext_multiple,
             params.atr_ext_reference,
             params.atr_period,
+            swings=swings_h,
         )
         near = near_fib(
             hourly,

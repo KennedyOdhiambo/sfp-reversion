@@ -20,6 +20,7 @@ def atr_extension(
     reference: str = "recent_swing",
     atr_period: int = 14,
     swing_lookback: int = 5,
+    swings: pd.DataFrame | None = None,
 ) -> pd.Series:
     atr = atr_series(df, atr_period).shift(1)
     price = price_levels.reindex(df.index).to_numpy(dtype=float)
@@ -29,14 +30,17 @@ def atr_extension(
         return pd.Series((np.abs(price - ref) >= limit).tolist(), index=df.index).fillna(False)
     if reference != "recent_swing":
         raise ValueError(f"Unknown ATR extension reference: {reference!r}")
-    ref = _last_confirmed_swing(df, atr_period, swing_lookback)
+    ref = _last_confirmed_swing(df, atr_period, swing_lookback, swings)
     return pd.Series((np.abs(price - ref) >= limit).tolist(), index=df.index).fillna(False)
 
 
-def _last_confirmed_swing(df: pd.DataFrame, atr_period: int, swing_lookback: int) -> np.ndarray:
+def _last_confirmed_swing(
+    df: pd.DataFrame, atr_period: int, swing_lookback: int, swings: pd.DataFrame | None = None
+) -> np.ndarray:
     """Per-bar price of the most recent confirmed swing (NaN before the first)."""
     n = len(df)
-    swings = swing_points(df, swing_lookback, atr_period, min_magnitude_atr=0.0)
+    if swings is None:
+        swings = swing_points(df, swing_lookback, atr_period, min_magnitude_atr=0.0)
     if swings.empty:
         return np.full(n, np.nan)
     pos = df.index.get_indexer(swings.index) + swing_lookback
