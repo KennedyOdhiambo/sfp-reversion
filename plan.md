@@ -227,12 +227,16 @@ House rules for every phase:
 - `src/sfp_reversion/levels/detection.py` — fractal swings (N=5 bars each side, min 0.3×ATR
   magnitude) clustered within 10 ticks into levels at their mean price; a level is only known
   from its confirmation bar onward.
+- Levels are detected on the **daily** frame (Option A: daily = where the levels are,
+  hourly = when entries trigger). Entry-timeframe consumption is Phase 10's job.
 - Done when: detected levels match hand-counted levels on 2–3 hand-labeled real-chart excerpts.
 
 ### Phase 4 — Touch / retest counters (§2.3, §2.4)
 - Touch = bar within 0.1×ATR of the level; the forming swing is touch #1; later approaches
   are retests; a close beyond tolerance = break (level dead).
-- In `src/sfp_reversion/levels/` alongside detection.
+- In `src/sfp_reversion/levels/` alongside detection. The module is timeframe-agnostic: it
+  counts approaches on whatever frame it is given — under Option A that will be hourly bars
+  against daily-detected levels (wired in Phase 10).
 - Done when: counters match hand counts on labeled excerpts, including one break case and one
   3-retest exhaustion case.
 

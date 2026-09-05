@@ -21,6 +21,7 @@ data:
 levels:
   swing_lookback: 5          # fractal swing window (bars each side)
   cluster_ticks: 10          # max tick distance between swings merged into one level
+  tick_size: 0.0001          # price tick for the pair (clustering distance unit)
   min_swing_magnitude_atr: 0.3  # min swing size in ATR, else noise
   touch_tolerance_atr: 0.1   # bar within this fraction of ATR of the level = touch
   retest_start: first_touch  # forming swing counts as touch #1
