@@ -78,7 +78,7 @@ def near_fib(
 ) -> pd.Series:
     """True where the level price sits within ``proximity_atr``×ATR of a live fib."""
     grid = fib_grid(df, swing_lookback, ratios, atr_period)
-    prox = proximity_atr * atr_series(df, atr_period)
+    prox = proximity_atr * atr_series(df, atr_period).shift(1)
     hit = pd.Series(False, index=df.index)
     for col in grid.columns:
         diff = (price_levels - grid[col]).abs()
@@ -96,7 +96,7 @@ def fib_override_price(
 ) -> pd.Series:
     """Nearest live fib within proximity, else NaN (the special limit rule)."""
     grid = fib_grid(df, swing_lookback, ratios, atr_period)
-    prox = (proximity_atr * atr_series(df, atr_period)).to_numpy(dtype=float)[:, None]
+    prox = (proximity_atr * atr_series(df, atr_period).shift(1)).to_numpy(dtype=float)[:, None]
     dist = np.abs(
         grid.to_numpy(dtype=float) - price_levels.reindex(df.index).to_numpy(dtype=float)[:, None]
     )

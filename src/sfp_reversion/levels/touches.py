@@ -27,7 +27,7 @@ class LevelEvent:
 
 def count_touches(level: Level, df: pd.DataFrame, tolerance_atr: float) -> int:
     """Approach bars from formation until a break, minimum 1 (the forming swing)."""
-    atr = atr_series(df).to_numpy()
+    atr = atr_series(df).shift(1).to_numpy()
     n = 0
     for i in range(len(df)):
         if df.index[i] < level.formed_at or not atr[i] > 0:
@@ -48,7 +48,7 @@ def retest_events(
     retest_start: str = "first_touch",
 ) -> list[LevelEvent]:
     """Full touch/retest/break timeline for one level, oldest first."""
-    atr = atr_series(df).to_numpy()
+    atr = atr_series(df).shift(1).to_numpy()
     events: list[LevelEvent] = []
     seen_touch = retest_start == "first_touch"
     retest_count = 0

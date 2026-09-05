@@ -21,7 +21,7 @@ def atr_extension(
     atr_period: int = 14,
     swing_lookback: int = 5,
 ) -> pd.Series:
-    atr = atr_series(df, atr_period)
+    atr = atr_series(df, atr_period).shift(1)
     price = price_levels.reindex(df.index).to_numpy(dtype=float)
     limit = multiple * atr.to_numpy(dtype=float)
     if reference == "prior_close":
