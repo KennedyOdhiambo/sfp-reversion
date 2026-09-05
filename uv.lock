@@ -547,12 +547,6 @@ wheels = [
 ]
 
 [[package]]
-name = "oandapyv20"
-version = "0.7.2"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/10/f7/04f0ee293c979829cad5d8ee8d55df19f1dedf5cb4ebd35fb1e6b039fff4/oandapyV20-0.7.2.tar.gz", hash = "sha256:5ca3990f824d0b16afd49d8e08f7403862d2b3c5a583470f777db7f76f04d073", size = 51615, upload-time = "2021-08-27T20:50:40.477Z" }
-
-[[package]]
 name = "packaging"
 version = "26.3"
 source = { registry = "https://pypi.org/simple" }
@@ -933,7 +927,6 @@ source = { editable = "." }
 dependencies = [
     { name = "matplotlib" },
     { name = "numpy" },
-    { name = "oandapyv20" },
     { name = "pandas" },
     { name = "pyarrow" },
     { name = "pyyaml" },
@@ -951,7 +944,6 @@ dev = [
 requires-dist = [
     { name = "matplotlib", specifier = ">=3.8" },
     { name = "numpy", specifier = ">=2.0" },
-    { name = "oandapyv20", specifier = ">=0.6" },
     { name = "pandas", specifier = ">=2.2" },
     { name = "pyarrow", specifier = ">=16.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },

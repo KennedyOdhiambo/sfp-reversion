@@ -1,12 +1,13 @@
-"""Phase 2 tests: loader paging, caching, slicing — all against a stub client."""
+"""Phase 2 tests: loader caching/slicing plus Yahoo parsing — no network."""
 
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 import pytest
 
-from sfp_reversion.data.loader import cache_path, load_ohlc
+from sfp_reversion.data.loader import _parse_yahoo, cache_path, load_ohlc, yahoo_symbol
 from sfp_reversion.data.schema import empty_ohlc
 
 
@@ -18,33 +19,23 @@ def _bars(start: str, n: int, price: float = 1.1) -> pd.DataFrame:
             "high": price + 0.01,
             "low": price - 0.01,
             "close": price,
-            "volume": 100.0,
+            "volume": 0.0,
         },
         index=idx,
     )
 
 
-class StubClient:
-    """Canned pages of candles; records calls so tests can assert paging."""
+def _stub(
+    frame: pd.DataFrame,
+) -> Any:
+    def fetch(symbol: str, granularity: str, start: Any, end: Any) -> pd.DataFrame:
+        return frame
 
-    def __init__(self, pages: list[pd.DataFrame]) -> None:
-        self._pages = list(pages)
-        self.calls = 0
-
-    def candles(
-        self, pair: str, granularity: str, price: str, start: str, end: str
-    ) -> pd.DataFrame:
-        self.calls += 1
-        if self._pages:
-            return self._pages.pop(0)
-        return empty_ohlc()
+    return fetch
 
 
-class FailingClient:
-    def candles(
-        self, pair: str, granularity: str, price: str, start: str, end: str
-    ) -> pd.DataFrame:
-        raise ConnectionError("network down")
+def _failing(symbol: str, granularity: str, start: Any, end: Any) -> pd.DataFrame:
+    raise ConnectionError("network down")
 
 
 def _dt(day: int) -> datetime:
@@ -52,33 +43,31 @@ def _dt(day: int) -> datetime:
 
 
 def test_fetch_caches_and_reloads(tmp_path: Path) -> None:
-    client = StubClient([_bars("2024-01-01", 5)])
-    first = load_ohlc("EUR_USD", _dt(1), _dt(5), client=client, cache_dir=tmp_path)
+    first = load_ohlc(
+        "EUR_USD", _dt(1), _dt(5), fetcher=_stub(_bars("2024-01-01", 5)), cache_dir=tmp_path
+    )
     assert len(first) == 5
     assert cache_path(tmp_path, "EUR_USD", "D").exists()
 
-    # second call hits cache only: failing network still returns data
-    second = load_ohlc("EUR_USD", _dt(1), _dt(5), client=FailingClient(), cache_dir=tmp_path)
+    second = load_ohlc("EUR_USD", _dt(1), _dt(5), fetcher=_failing, cache_dir=tmp_path)
     pd.testing.assert_frame_equal(first, second)
 
 
 def test_slices_to_requested_window(tmp_path: Path) -> None:
     out = load_ohlc(
-        "EUR_USD", _dt(2), _dt(4), client=StubClient([_bars("2024-01-01", 5)]), cache_dir=tmp_path
+        "EUR_USD", _dt(2), _dt(4), fetcher=_stub(_bars("2024-01-01", 5)), cache_dir=tmp_path
     )
     assert out.index.min() == pd.Timestamp("2024-01-02", tz="UTC")
     assert out.index.max() == pd.Timestamp("2024-01-04", tz="UTC")
 
 
 def test_merges_new_bars_into_cache(tmp_path: Path) -> None:
-    load_ohlc(
-        "EUR_USD", _dt(1), _dt(3), client=StubClient([_bars("2024-01-01", 3)]), cache_dir=tmp_path
-    )
+    load_ohlc("EUR_USD", _dt(1), _dt(3), fetcher=_stub(_bars("2024-01-01", 3)), cache_dir=tmp_path)
     out = load_ohlc(
         "EUR_USD",
         _dt(1),
         _dt(5),
-        client=StubClient([_bars("2024-01-04", 2, price=1.2)]),
+        fetcher=_stub(_bars("2024-01-04", 2, price=1.2)),
         cache_dir=tmp_path,
     )
     assert len(out) == 5
@@ -87,7 +76,7 @@ def test_merges_new_bars_into_cache(tmp_path: Path) -> None:
 
 def test_no_cache_and_failed_fetch_raises(tmp_path: Path) -> None:
     with pytest.raises(RuntimeError, match="no cache"):
-        load_ohlc("EUR_USD", _dt(1), _dt(5), client=FailingClient(), cache_dir=tmp_path)
+        load_ohlc("EUR_USD", _dt(1), _dt(5), fetcher=_failing, cache_dir=tmp_path)
 
 
 def test_corrupt_cache_is_rebuilt(tmp_path: Path) -> None:
@@ -95,14 +84,62 @@ def test_corrupt_cache_is_rebuilt(tmp_path: Path) -> None:
     bad.parent.mkdir(parents=True, exist_ok=True)
     bad.write_text("not a parquet file")
     out = load_ohlc(
-        "EUR_USD", _dt(1), _dt(3), client=StubClient([_bars("2024-01-01", 3)]), cache_dir=tmp_path
+        "EUR_USD", _dt(1), _dt(3), fetcher=_stub(_bars("2024-01-01", 3)), cache_dir=tmp_path
     )
     assert len(out) == 3
 
 
-def test_missing_token_gives_actionable_error(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.delenv("SFP_OANDA_TOKEN", raising=False)
-    with pytest.raises(RuntimeError, match="SFP_OANDA_TOKEN"):
-        load_ohlc("EUR_USD", _dt(1), _dt(5), client=None, cache_dir=tmp_path)
+def test_symbol_mapping_defaults_and_overrides() -> None:
+    assert yahoo_symbol("EUR_USD") == "EURUSD=X"
+    assert yahoo_symbol("USD_JPY") == "JPY=X"  # from config.yaml symbols
+    with pytest.raises(ValueError, match="EUR_USD"):
+        yahoo_symbol("EURUSD")
+
+
+def test_parse_yahoo_drops_null_rows() -> None:
+    payload = {
+        "chart": {
+            "result": [
+                {
+                    "timestamp": [1704067200, 1704153600, 1704240000],
+                    "indicators": {
+                        "quote": [
+                            {
+                                "open": [1.1, None, 1.2],
+                                "high": [1.11, None, 1.21],
+                                "low": [1.09, None, 1.19],
+                                "close": [1.105, None, 1.205],
+                                "volume": [0, 0, 0],
+                            }
+                        ]
+                    },
+                }
+            ]
+        }
+    }
+    out = _parse_yahoo(payload)
+    assert len(out) == 2
+    assert out.index[0] == pd.Timestamp("2024-01-01", tz="UTC")
+
+
+def test_parse_yahoo_empty_result_raises() -> None:
+    with pytest.raises(RuntimeError, match="no data"):
+        _parse_yahoo({"chart": {"result": None, "error": {"code": "Not Found"}}})
+
+
+def test_granularity_override_uses_separate_cache(tmp_path: Path) -> None:
+    out = load_ohlc(
+        "EUR_USD",
+        _dt(1),
+        _dt(3),
+        fetcher=_stub(_bars("2024-01-01", 3)),
+        cache_dir=tmp_path,
+        granularity="H1",
+    )
+    assert len(out) == 3
+    assert cache_path(tmp_path, "EUR_USD", "H1").exists()
+    assert not cache_path(tmp_path, "EUR_USD", "D").exists()
+
+
+def test_empty_frame_helper() -> None:
+    assert empty_ohlc().empty

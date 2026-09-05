@@ -1,15 +1,22 @@
 # SFP Reversion strategy — all tunable parameters live here, never in code.
-# Every parameter in this file is a candidate for walk-forward sweeps (plan.md §5/Block 13).
+# Every parameter in this file is a candidate for walk-forward sweeps (plan.md §5/Phase 13).
 
 data:
-  source: local              # local | oanda (Block 2b)
+  source: yahoo              # yahoo (keyless, global)
   cache_dir: data/cache      # parquet cache, relative to project root
-  oanda:
-    environment: practice    # practice | live
-    # account_id: ""         # set via SFP_OANDA_ACCOUNT_ID env var (never commit)
-    # token: ""              # set via SFP_OANDA_TOKEN env var (never commit)
-    granularity: D           # D (daily), H4, H1, ...
-    price: M                 # M (midpoint), B (bid), A (ask)
+  yahoo:
+    granularity: D           # D | W | M | H1
+    symbols:                 # pair -> Yahoo symbol (convention: EUR_USD -> EURUSD=X)
+      EUR_USD: EURUSD=X
+      GBP_USD: GBPUSD=X
+      USD_JPY: JPY=X
+      USD_CHF: CHF=X
+      AUD_USD: AUDUSD=X
+      USD_CAD: CAD=X
+      NZD_USD: NZDUSD=X
+      EUR_GBP: EURGBP=X
+      EUR_JPY: EURJPY=X
+      GBP_JPY: GBPJPY=X
 
 levels:
   swing_lookback: 5          # fractal swing window (bars each side)

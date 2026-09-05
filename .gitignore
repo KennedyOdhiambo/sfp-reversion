@@ -8,3 +8,9 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Local data cache (real OHLC parquet files, re-fetchable, never commit)
+data/
+
+# Reports and plots (generated artifacts)
+reports/

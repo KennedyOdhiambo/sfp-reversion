@@ -214,14 +214,14 @@ House rules for every phase:
 - Done when: unit tests pass — good frames accepted; bad frames (naive timezone, duplicate
   timestamps, high<low, missing columns) rejected.
 
-### Phase 2 — Data loader (OANDA + cache)
-- `src/sfp_reversion/data/loader.py` — pull real OHLC from the OANDA REST API (`oandapyV20`,
-  practice env), forward-paged at 5000 candles per request, merged into a local parquet cache
+### Phase 2 — Data loader (Yahoo + cache)
+- `src/sfp_reversion/data/loader.py` — pull real OHLC from Yahoo Finance chart API (keyless,
+  global; OANDA onboarding excludes Kenya, Stooq is bot-walled). One bulk request per pair
+  (daily history to ~2003), merged into a local parquet cache
   (`data/cache/{pair}_{granularity}.parquet`). Never re-fetch cached ranges; network failure
-  degrades to cache with a warning (hard error only when the cache is empty too). Creds via
-  `SFP_OANDA_TOKEN` / `SFP_OANDA_ACCOUNT_ID` env vars — never in git.
+  degrades to cache with a warning (hard error only when the cache is empty too). No creds.
 - Done when: a live fetch for one pair loads, validates, caches, and reloads from cache;
-  unit tests with a stub client cover paging, merging, slicing, and corrupt-cache recovery.
+  unit tests with a stub fetcher cover merging, slicing, and corrupt-cache recovery.
 
 ### Phase 3 — Swing + level detection (§2.1)
 - `src/sfp_reversion/levels/detection.py` — fractal swings (N=5 bars each side, min 0.3×ATR
@@ -265,8 +265,10 @@ House rules for every phase:
 
 ### Phase 10 — Decision-tree assembly (§3)
 - `src/sfp_reversion/signals/decision_tree.py` — Phases 3–9 wired with AND gates, the §2.2
-  minimum-1:1 R:R filter, FTA targets, and fib-override limits. Pure function: OHLC → signal
-  table (timestamp, direction, limit, stop, target, touches, retests, factors…).
+  minimum-1:1 R:R filter, FTA targets, and fib-override limits. Two inputs: the **hourly**
+  (entry-timeframe) frame and the **daily** frame (D1 bias context). Pure function:
+  (hourly, daily) → signal table (timestamp, direction, limit, stop, target, touches, retests,
+  factors…).
 - Done when: integration test on a small fixed real-data slice produces hand-verified rows,
   including a lookahead probe (no signal may reference future bars).
 
@@ -328,9 +330,7 @@ House rules for every phase:
 
 1. ~~Resolve `[CONFIRM]` items in Section 2~~ — done in v0.2 (all §2 items resolved;
    numbers marked `(tunable)` go through walk-forward, never hand-tuned on full history)
-2. Confirm real data source for Phase 1 (default: OANDA practice + local parquet cache;
-   needs `SFP_OANDA_TOKEN` / `SFP_OANDA_ACCOUNT_ID`) — needed before any module beyond signal
-   logic can be tested against real data
+2. ~~Data source~~ — Yahoo Finance (keyless, works from Kenya) decided in Phase 2; no creds.
 3. Work the phases in order starting at Phase 0 — each phase's Definition of Done holds
    before the next begins. Reference (not copy-paste) implementation lives on branch
    `archive/full-implementation-20260905`; we rebuild for understanding.
