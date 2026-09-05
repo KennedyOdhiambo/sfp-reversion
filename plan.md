@@ -198,6 +198,8 @@ House rules for every phase:
 - **Tests per phase.** `pytest` must be green before the next phase starts.
 - **Config, not hardcoding.** Every `(tunable)` number lives in `config.yaml`.
 - **No lookahead.** Any output at bar `t` may use only data available at or before `t`.
+- **ATR regime through the prior bar.** Every ATR-scaled threshold at bar `t` uses ATR up to
+  `t−1` — a violent bar must never set its own hurdle.
 - **One commit per phase.** "Which code + config produced this result" must stay answerable.
 - Unit tests may use tiny hand-made OHLC frames; anything resembling a backtest result must
   use real data (§5).
