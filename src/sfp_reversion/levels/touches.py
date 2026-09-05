@@ -81,3 +81,31 @@ def _broke(level: Level, close: float, tol: float) -> bool:
     if level.kind == "resistance":
         return close > level.price + tol
     return close < level.price - tol
+
+
+def approach_episodes(
+    events: list[LevelEvent], df: pd.DataFrame
+) -> tuple[list[list[LevelEvent]], bool]:
+    """Collapse same-approach bars into episodes; flag a terminal break.
+
+    Returns (episodes, broke): each episode is the events of one continuous
+    visit (bars on consecutive positions), oldest first. A break ends the
+    timeline and is not an episode.
+    """
+    episodes: list[list[LevelEvent]] = []
+    current: list[LevelEvent] = []
+    prev_pos = -2
+    broke = False
+    for e in events:
+        if e.event == "break":
+            broke = True
+            break
+        pos = df.index.get_loc(e.ts)
+        if current and pos > prev_pos + 1:
+            episodes.append(current)
+            current = []
+        current.append(e)
+        prev_pos = int(pos)
+    if current:
+        episodes.append(current)
+    return episodes, broke

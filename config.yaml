@@ -33,6 +33,7 @@ confluence:
     ema_slow: 50
     lookback: 10             # bars confirming higher highs / lower lows
   fib:
+    swing_lookback: 20       # swing window for the legs fibs are drawn on
     ratios: [0.382, 0.5, 0.618, 0.786]
     proximity_atr: 0.2       # level within this fraction of ATR of a fib = confluence
   atr_extension:
