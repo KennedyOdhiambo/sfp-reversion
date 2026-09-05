@@ -75,8 +75,8 @@ backtest:
 
 validation:
   walk_forward:
-    in_sample_years: 2
-    out_of_sample_years: 0.5
+    in_sample_years: 0.75       # 9 months (sized to ~2y of hourly history)
+    out_of_sample_years: 0.25   # 3 months rolling step
     min_trades: 20
   significance:
     confidence: 0.95
