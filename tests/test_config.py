@@ -1,4 +1,5 @@
-"""Block 0 smoke test: config loads and every §2 tunable is present."""
+"""Phase 0 smoke test: config loads and every §2 tunable is present."""
+
 from sfp_reversion import get_config
 
 

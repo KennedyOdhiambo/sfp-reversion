@@ -1,4 +1,5 @@
 """Typed, read-only access to config.yaml (+ env secrets). All tunables live here."""
+
 from __future__ import annotations
 
 import logging
