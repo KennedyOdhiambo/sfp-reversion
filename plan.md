@@ -214,11 +214,14 @@ House rules for every phase:
 - Done when: unit tests pass — good frames accepted; bad frames (naive timezone, duplicate
   timestamps, high<low, missing columns) rejected.
 
-### Phase 2 — Data loader, local first (OANDA later)
-- `src/sfp_reversion/data/loader.py` — load local CSV/Parquet files into the canonical frame,
-  plus the parquet cache layout. OANDA fetching becomes Phase 2b once API creds exist; nothing
-  downstream waits for it.
-- Done when: a real sample file loads, validates, and reloads from cache without re-reading.
+### Phase 2 — Data loader (OANDA + cache)
+- `src/sfp_reversion/data/loader.py` — pull real OHLC from the OANDA REST API (`oandapyV20`,
+  practice env), forward-paged at 5000 candles per request, merged into a local parquet cache
+  (`data/cache/{pair}_{granularity}.parquet`). Never re-fetch cached ranges; network failure
+  degrades to cache with a warning (hard error only when the cache is empty too). Creds via
+  `SFP_OANDA_TOKEN` / `SFP_OANDA_ACCOUNT_ID` env vars — never in git.
+- Done when: a live fetch for one pair loads, validates, caches, and reloads from cache;
+  unit tests with a stub client cover paging, merging, slicing, and corrupt-cache recovery.
 
 ### Phase 3 — Swing + level detection (§2.1)
 - `src/sfp_reversion/levels/detection.py` — fractal swings (N=5 bars each side, min 0.3×ATR
@@ -295,10 +298,6 @@ House rules for every phase:
 ### Phase 16 — CLI wiring
 - `fetch / signals / backtest / validate / journal` commands tying all phases together.
 - Done when: each command runs end-to-end from a clean cache.
-
-### Phase 2b — OANDA fetch (whenever creds exist)
-- Live fetch into the same cache Phase 2 defines. Independent of Phases 3–16, which only ever
-  read the cache.
 
 ---
 
