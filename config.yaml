@@ -1,5 +1,5 @@
-# SFP Reversion strategy — all tunable parameters live here, never in code.
-# Tunables are judged by walk-forward OOS. Spec: strategy.md.
+# Setup A (SFP) — all tunable parameters live here, never in code.
+# Judged by walk-forward OOS. Spec: strategy.md. Why: philosophy.md.
 
 data:
   cache_dir: data/cache      # parquet cache, relative to project root
@@ -34,60 +34,31 @@ data:
     - WTI_USD
     - BTC_USD
 
+atr:
+  period: 14                 # Wilder ATR period, all timeframes
+
 levels:
   swing_lookback: 5          # fractal swing window (bars each side)
   cluster_ticks: 10          # max tick distance between swings merged into one level
   tick_size: 0.0001          # price tick for the pair (clustering distance unit)
   min_swing_magnitude_atr: 0.3  # min swing size in ATR, else noise
-  touch_tolerance_atr: 0.1   # bar within this fraction of ATR of the level = touch
-  retest_start: first_touch  # forming swing counts as touch #1
-  max_retests: 2             # retests beyond this exhaust the level (pass)
+  touch_tolerance_atr: 0.1   # close beyond this fraction of ATR = break (level dead)
 
-confluence:
-  d1_bias:
-    ema_fast: 20
-    ema_slow: 50
-    lookback: 10             # bars confirming higher highs / lower lows
-  fib:
-    swing_lookback: 20       # swing window for the legs fibs are drawn on
-    ratios: [0.382, 0.5, 0.618, 0.786]
-    proximity_atr: 0.2       # level within this fraction of ATR of a fib = confluence
-  atr_extension:
-    period: 14
-    multiple: 1.0            # level this far (in ATR) past the recent swing = stretched
-    reference: recent_swing   # recent_swing | prior_close
-
-confirmation:
-  sfp:
-    wick_atr: 0.1            # min wick beyond level, in ATR
-    close_inside_atr: 0.05   # min close back inside level, in ATR
-  macd:
-    fast: 12
-    slow: 26
-    signal: 9
-    use_histogram: true      # divergence on histogram (false = MACD line)
-    swing_lookback: 5
-    n_swings: 3              # divergence scoped to prior 3 swing lows/highs
-
-signal:
-  touch_confluence:          # touches -> required confluence factors (AND with retest gate)
-    "3": 0
-    "2": 1
-    "1": 2
-  retest_gate:               # retests -> required confirmation
-    "1": sfp
-    "2": sfp_macd
-  min_reward_risk: 1.0       # §2.2 inverse-level filter: skip if target < this x stop distance
-  special_fib_rule: true     # place limit at fib level instead of raw level when close to one
-  stop_buffer_atr: 0.1       # stop beyond thrust-candle extreme, in ATR
+sfp:
+  wick_atr: 0.1              # min wick beyond level, in ATR
+  close_inside_atr: 0.05     # min close back inside level, in ATR
+  max_origin_wick_atr: 1.0   # origin swing wick above this (in ATR) = messy shelf, skip; <=0 disables
+  stop_buffer_atr: 0.1       # stop beyond sweep extreme, in ATR
   fta_fallback_atr: 2.0      # target when no opposing level exists: entry +/- this x ATR
+  min_reward_risk: 1.0       # skip if target distance < this x stop distance
 
 backtest:
   spread_pips: 1.0
   slippage_pips: 0.5
   pip_size: 0.0001
-  risk_per_trade_pct: 1.0    # fixed-fractional risk per trade
+  risk_per_trade_pct: 1.0    # fixed-fractional risk per trade; one position at a time
   min_equity: 10000          # starting equity
+  max_hold_bars: 120         # timeout exit, bars after entry
 
 validation:
   walk_forward:
