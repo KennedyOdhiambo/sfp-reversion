@@ -13,6 +13,7 @@ import pandas as pd
 from sfp_reversion.backtest.engine import BacktestParams, run_backtest
 from sfp_reversion.config import get_config, setup_logging
 from sfp_reversion.data.loader import load_ohlc
+from sfp_reversion.portfolio import run_portfolio
 from sfp_reversion.report import metrics_table, plot_equity_curve
 from sfp_reversion.signals import DecisionTreeParams, generate_signals
 from sfp_reversion.validation import (
@@ -55,6 +56,13 @@ def _parser() -> argparse.ArgumentParser:
     v.add_argument("--oos-years", type=float, default=None)
     v.add_argument("--start", default=None, help="YYYY-MM-DD")
     v.add_argument("--end", default=None, help="YYYY-MM-DD")
+
+    u = sub.add_parser("portfolio", help="Universe signals + pooled trades + equity")
+    u.add_argument("--pairs", nargs="+", default=None)
+    u.add_argument("--granularity", default="H1")
+    u.add_argument("--start", default=None, help="YYYY-MM-DD")
+    u.add_argument("--end", default=None, help="YYYY-MM-DD")
+    u.add_argument("--out-dir", default=None)
     return p
 
 
@@ -157,6 +165,44 @@ def _cmd_validate(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_portfolio(args: argparse.Namespace) -> int:
+    cfg = get_config()
+    pairs = args.pairs or list(cfg.get("data.tradingview.universe", ["EUR_USD"]))
+    out_dir = Path(args.out_dir or cfg.get("report.output_dir", "reports"))
+    out_dir.mkdir(parents=True, exist_ok=True)
+    frames = {}
+    for pair in pairs:
+        try:
+            hourly = load_ohlc(pair, _dt(args.start), _dt(args.end), granularity=args.granularity)
+            daily = load_ohlc(pair, _dt(args.start), _dt(args.end))
+        except Exception as exc:
+            print(f"{pair}: skipped ({exc})")
+            continue
+        frames[pair] = (hourly, daily)
+        print(f"{pair}: {len(hourly)} entry bars, {len(daily)} daily bars")
+    result = run_portfolio(frames)
+    trades_path = out_dir / "portfolio_trades.csv"
+    result.trades_df.to_csv(trades_path, index=False)
+    print(f"\nwrote {trades_path} ({len(result.trades_df)} trades)")
+    if not result.symbol_metrics.empty:
+        cols = ["symbol", "n_trades", "win_rate", "total_pnl", "profit_factor", "max_drawdown"]
+        print(
+            result.symbol_metrics[
+                [c for c in cols if c in result.symbol_metrics.columns]
+            ].to_string(index=False)
+        )
+    print("\n" + result.portfolio_metrics.to_string(index=False))
+    s = result.significance
+    print(
+        f"sharpe={s['sharpe']:.2f} [{s['ci_low']:.2f}, {s['ci_high']:.2f}] deflated_PSR={s['deflated_psr']:.2f}"
+    )
+    curve_path = plot_equity_curve(
+        result.equity_curve, out_dir / "portfolio_equity.png", title="Portfolio equity"
+    )
+    print(f"equity curve: {curve_path}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     setup_logging()
     args = _parser().parse_args(argv)
@@ -165,6 +211,7 @@ def main(argv: list[str] | None = None) -> int:
         "signals": _cmd_signals,
         "backtest": _cmd_backtest,
         "validate": _cmd_validate,
+        "portfolio": _cmd_portfolio,
     }
     return handlers[args.command](args)
 

@@ -17,6 +17,22 @@ data:
       EUR_GBP: [EURGBP, OANDA]
       EUR_JPY: [EURJPY, OANDA]
       GBP_JPY: [GBPJPY, OANDA]
+      XAU_USD: [XAUUSD, OANDA]
+      XAG_USD: [XAGUSD, OANDA]
+      WTI_USD: [USOIL, TVC]
+      BTC_USD: [BTCUSD, OANDA]
+    universe:                # analyzed together as one portfolio
+    - EUR_USD
+    - GBP_USD
+    - USD_JPY
+    - USD_CHF
+    - AUD_USD
+    - USD_CAD
+    - NZD_USD
+    - XAU_USD
+    - XAG_USD
+    - WTI_USD
+    - BTC_USD
 
 levels:
   swing_lookback: 5          # fractal swing window (bars each side)
