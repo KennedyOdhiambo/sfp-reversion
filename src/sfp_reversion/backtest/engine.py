@@ -1,9 +1,11 @@
-"""Setup A backtest: market entries, stop/target/warning exits, costs, sizing.
+"""Setup A backtest: market/limit entries, stop/target/warning exits, costs, sizing.
 
-A signal at bar ``t`` fills at bar ``t+1``'s open (no lookahead) plus costs.
-Each bar checks exits in order: stop (worst case first), target, warning-sign
-close back through the sweep extreme, timeout. One position at a time; the
-warning exit applies only when the signal carries ``sweep_extreme``.
+A signal at bar ``t`` resolves on the execution frame (H1 or M5): market
+orders fill at bar ``t+1``'s open; limit orders fill at the limit price if a
+bar trades through it within ``expiry_bars`` (unfilled limits expire with no
+trade). Exits per bar, checked in order: stop (worst case first), target,
+warning-sign close back through the sweep extreme, timeout. One position at
+a time; the warning exit applies only when the signal carries ``sweep_extreme``.
 """
 
 from __future__ import annotations
@@ -102,15 +104,23 @@ def run_backtest(
             for _, s in by_bar[ts].iterrows():
                 if i + 1 >= len(df):
                     break
-                nxt = df.iloc[i + 1]
-                fill = _fill_price(str(s["direction"]), nxt, cost)
+                mode = s.get("entry_mode", "market")
+                expiry = int(s.get("expiry_bars", 0) or 0)
+                if mode == "limit":
+                    fill, fill_idx = _limit_fill(
+                        str(s["direction"]), float(s["entry_price"]), df, i, expiry, cost
+                    )
+                    if fill is None:
+                        continue  # expired unfilled: no trade
+                else:
+                    fill, fill_idx = _fill_price(str(s["direction"]), df.iloc[i + 1], cost), i + 1
                 risk_dist = abs(float(s["stop_price"]) - fill)
                 if not risk_dist > 0:
                     continue
                 open_pos = {
                     "signal_ts": ts,
-                    "entry_ts": df.index[i + 1],
-                    "entry_idx": i + 1,
+                    "entry_ts": df.index[fill_idx],
+                    "entry_idx": fill_idx,
                     "direction": str(s["direction"]),
                     "entry_price": fill,
                     "stop_price": float(s["stop_price"]),
@@ -153,6 +163,20 @@ def _fill_price(direction: str, bar: pd.Series, cost: float) -> float:
     if direction == "long":
         return float(bar["open"]) + cost
     return float(bar["open"]) - cost
+
+
+def _limit_fill(
+    direction: str, limit: float, df: pd.DataFrame, i: int, expiry: int, cost: float
+) -> tuple[float | None, int]:
+    """First bar after ``i`` (up to ``expiry`` bars out) trading through ``limit``."""
+    last = min(i + expiry, len(df) - 1)
+    for j in range(i + 1, last + 1):
+        bar = df.iloc[j]
+        touched = bar["low"] <= limit if direction == "long" else bar["high"] >= limit
+        if touched:
+            fill = limit + cost if direction == "long" else limit - cost
+            return fill, j
+    return None, -1
 
 
 def _check_exit(

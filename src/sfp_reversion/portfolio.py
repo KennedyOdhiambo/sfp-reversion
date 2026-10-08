@@ -33,13 +33,15 @@ def run_portfolio(
     signal_params: SfpParams | None = None,
     backtest_params: BacktestParams | None = None,
     starting_equity: float = 10000.0,
+    exec_frames: dict[str, pd.DataFrame] | None = None,
 ) -> PortfolioResult:
     signal_params = signal_params or SfpParams.from_config()
     backtest_params = backtest_params or BacktestParams.from_config()
+    exec_frames = exec_frames or {}
     per_symbol: dict[str, pd.DataFrame] = {}
     for symbol, (hourly, daily) in frames.items():
         sig = generate_sfp_signals(hourly, daily, signal_params)
-        res = run_backtest(hourly, sig, backtest_params)
+        res = run_backtest(exec_frames.get(symbol, hourly), sig, backtest_params)
         trades = res.trades_df.copy()
         trades["symbol"] = symbol
         per_symbol[symbol] = trades

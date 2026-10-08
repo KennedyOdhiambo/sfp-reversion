@@ -75,6 +75,13 @@ def _frames(pair: str) -> tuple:
     return load_ohlc(pair, granularity="H1"), load_ohlc(pair)
 
 
+def _exec_frame(pair: str, params) -> tuple:
+    """Execution frame: M5 when refining entries, else H1."""
+    if params.refine_entry:
+        return load_ohlc(pair, granularity="M5")
+    return load_ohlc(pair, granularity="H1")
+
+
 def _in_window(sig, start: str | None, end: str | None):
     if start:
         sig = sig[sig["timestamp"] >= _dt(start)]
@@ -104,14 +111,16 @@ def _cmd_signals(args: argparse.Namespace) -> int:
 def _cmd_backtest(args: argparse.Namespace) -> int:
     cfg = get_config()
     hourly, daily = _frames(args.pair)
+    sig_params = SfpParams.from_config()
     params = BacktestParams.from_config()
-    sig = _in_window(generate_sfp_signals(hourly, daily), args.start, args.end)
-    res = run_backtest(hourly, sig, params)
+    sig = _in_window(generate_sfp_signals(hourly, daily, sig_params), args.start, args.end)
+    exec_df = _exec_frame(args.pair, sig_params)
+    res = run_backtest(exec_df, sig, params)
     print(metrics_table(res.trades_df, res.equity_curve, params.min_equity).to_string(index=False))
     out_dir = Path(args.out_dir or cfg.get("report.output_dir", "reports"))
     curve = plot_equity_curve(res.equity_curve, out_dir / f"{args.pair}_equity.png")
     print(f"equity curve: {curve}")
-    pnls = run_random_baseline(hourly, max(len(sig), 1), params, args.n_baseline, args.seed)
+    pnls = run_random_baseline(exec_df, max(len(sig), 1), params, args.n_baseline, args.seed)
     passed, s = baseline_passes(pnls)
     print(f"random baseline: mean={s['mean']:.2f} p={s['p']:.3f} -> {'PASS' if passed else 'FAIL'}")
     return 0 if passed else 2
@@ -127,8 +136,9 @@ def _cmd_validate(args: argparse.Namespace) -> int:
         values = args.values or [0.05, 0.1, 0.15, 0.2]
 
         def run(v: float) -> float:
-            sig = generate_sfp_signals(hourly, daily, replace(params, **{args.parameter: v}))
-            res = run_backtest(hourly, sig, bt)
+            p = replace(params, **{args.parameter: v})
+            sig = generate_sfp_signals(hourly, daily, p)
+            res = run_backtest(_exec_frame(args.pair, p), sig, bt)
             return float(res.trades_df["pnl"].sum()) if not res.trades_df.empty else 0.0
 
         r = sweep_parameter(list(values), run)
@@ -137,6 +147,8 @@ def _cmd_validate(args: argparse.Namespace) -> int:
         print(f"best={r.best_value} robust={'yes' if r.robust else 'NO'}")
         return 0
 
+    m5_full = load_ohlc(args.pair, granularity="M5") if params.refine_entry else None
+
     def score_fn(is_h, is_d, oos_h, oos_d) -> tuple[float, int]:
         import pandas as pd
 
@@ -144,7 +156,11 @@ def _cmd_validate(args: argparse.Namespace) -> int:
         d = pd.concat([is_d, oos_d]) if not is_d.empty else oos_d
         sig = generate_sfp_signals(h, d, params)
         sig = sig[sig["timestamp"] >= oos_h.index[0]]
-        res = run_backtest(h, sig, bt)
+        if m5_full is not None:
+            exec_df = m5_full[(m5_full.index >= h.index[0]) & (m5_full.index <= oos_h.index[-1])]
+        else:
+            exec_df = h
+        res = run_backtest(exec_df, sig, bt)
         n = len(res.trades_df)
         return (float(res.trades_df["pnl"].sum()) if n else 0.0, n)
 
@@ -171,16 +187,19 @@ def _cmd_portfolio(args: argparse.Namespace) -> int:
     out_dir = Path(args.out_dir or cfg.get("report.output_dir", "reports"))
     out_dir.mkdir(parents=True, exist_ok=True)
     frames = {}
+    exec_frames = {}
+    sig_params = SfpParams.from_config()
     for pair in pairs:
         try:
             hourly = load_ohlc(pair, _dt(args.start), _dt(args.end), granularity=args.granularity)
             daily = load_ohlc(pair, _dt(args.start), _dt(args.end))
+            exec_frames[pair] = _exec_frame(pair, sig_params)
         except Exception as exc:
             print(f"{pair}: skipped ({exc})")
             continue
         frames[pair] = (hourly, daily)
         print(f"{pair}: {len(hourly)} entry bars, {len(daily)} daily bars")
-    result = run_portfolio(frames)
+    result = run_portfolio(frames, signal_params=sig_params, exec_frames=exec_frames)
     trades_path = out_dir / "portfolio_trades.csv"
     result.trades_df.to_csv(trades_path, index=False)
     print(f"\nwrote {trades_path} ({len(result.trades_df)} trades)")

@@ -136,3 +136,48 @@ def test_one_position_at_a_time() -> None:
     res = run_backtest(df, sigs, FREE)
     assert len(res.trades_df) == 1
     assert res.trades_df.iloc[0]["direction"] == "long"
+
+
+def _limit_sig(ts: pd.Timestamp, stop: float, target: float, expiry: int = 5) -> pd.DataFrame:
+    return pd.DataFrame(
+        [
+            {
+                "timestamp": ts,
+                "direction": "long",
+                "entry_price": 1.1000,
+                "stop_price": stop,
+                "target_price": target,
+                "entry_mode": "limit",
+                "expiry_bars": float(expiry),
+            }
+        ]
+    )
+
+
+def test_limit_fills_on_touch_and_expires_otherwise() -> None:
+    df = _frame(
+        [
+            (1.1020, 1.1030, 1.1010, 1.1020),  # signal bar
+            (1.1015, 1.1020, 1.1010, 1.1015),  # no touch of 1.10
+            (1.1010, 1.1012, 1.0995, 1.1000),  # touches 1.10 -> fill
+            (1.1000, 1.1120, 1.0995, 1.1110),  # target 1.11 hit
+            (1.1110, 1.1120, 1.1100, 1.1110),
+        ]
+    )
+    res = run_backtest(df, _limit_sig(df.index[0], 1.0950, 1.1100), FREE)
+    assert len(res.trades_df) == 1
+    t = res.trades_df.iloc[0]
+    assert t["entry_price"] == 1.1000
+    assert t["entry_ts"] == df.index[2]
+    assert t["exit_reason"] == "target"
+
+    df2 = _frame(
+        [
+            (1.1020, 1.1030, 1.1010, 1.1020),
+            (1.1015, 1.1020, 1.1010, 1.1015),
+            (1.1012, 1.1020, 1.1010, 1.1015),
+            (1.1015, 1.1020, 1.1010, 1.1015),
+        ]
+    )
+    res2 = run_backtest(df2, _limit_sig(df2.index[0], 1.0950, 1.1100, expiry=2), FREE)
+    assert res2.trades_df.empty  # never touched within expiry: no trade
