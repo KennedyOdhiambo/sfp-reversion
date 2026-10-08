@@ -108,3 +108,13 @@ def test_min_reward_risk_filter_skips() -> None:
     hourly = _hourly(special={60: (1.0950, 1.0970, 1.0890, 1.0905)})
     sig = generate_sfp_signals(hourly, _daily(), _params(min_reward_risk=10.0))
     assert sig.empty
+
+
+def test_empty_signals_filter_by_timestamp() -> None:
+    """Empty signal tables must survive timestamp comparisons (walk-forward)."""
+    hourly = _hourly()
+    sig = generate_sfp_signals(hourly, _daily(), _params(min_reward_risk=10.0))
+    assert sig.empty
+    assert str(sig["timestamp"].dt.tz) == "UTC"
+    filtered = sig[sig["timestamp"] >= hourly.index[50]]
+    assert filtered.empty

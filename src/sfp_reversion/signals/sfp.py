@@ -231,4 +231,19 @@ def _available_from(
 
 
 def _empty_signals() -> pd.DataFrame:
-    return pd.DataFrame({c: [] for c in SIGNAL_COLUMNS})
+    out = pd.DataFrame(
+        {
+            "timestamp": pd.Series(dtype="datetime64[ns, UTC]"),
+            "direction": pd.Series(dtype=object),
+            "entry_price": pd.Series(dtype=float),
+            "stop_price": pd.Series(dtype=float),
+            "target_price": pd.Series(dtype=float),
+            "level_price": pd.Series(dtype=float),
+            "sweep_extreme": pd.Series(dtype=float),
+            "wick_atr_mult": pd.Series(dtype=float),
+            "close_atr_mult": pd.Series(dtype=float),
+            "origin_wick_mult": pd.Series(dtype=float),
+            "expected_r": pd.Series(dtype=float),
+        }
+    )
+    return out[SIGNAL_COLUMNS]
