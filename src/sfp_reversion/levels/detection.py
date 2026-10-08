@@ -130,3 +130,53 @@ def detect_levels(
         else:
             best.add_swing(price, wick, wick_mult)
     return levels
+
+
+def filter_levels(
+    levels: list[Level],
+    daily: pd.DataFrame,
+    min_swings: int = 1,
+    extreme_lookback: int = 0,
+    extreme_proximity_atr: float = 0.25,
+    min_spacing_atr: float = 0.0,
+    atr_period: int = 14,
+) -> list[Level]:
+    """Keep only obvious levels. All filters off at defaults (pass-through).
+
+    - ``min_swings``: level must bundle this many swings (equal highs/lows).
+    - ``extreme_lookback``: level must sit within ``extreme_proximity_atr`` of
+      a rolling highest-high / lowest-low over this many daily bars, evaluated
+      point-in-time (a bar only counts once printed). 0 disables.
+    - ``min_spacing_atr``: drop the weaker of two levels closer than this in
+      daily-ATR units (median ATR as the yardstick). 0 disables.
+    """
+    out = [lv for lv in levels if len(lv.swing_prices) >= min_swings]
+    if extreme_lookback > 0:
+        atr_d = atr_series(daily, atr_period)
+        hi = daily["high"].rolling(extreme_lookback).max()
+        lo = daily["low"].rolling(extreme_lookback).min()
+        kept: list[Level] = []
+        for lv in out:
+            bars = daily.loc[daily.index >= lv.formed_at]
+            near = False
+            for ts in bars.index:
+                a = float(atr_d.loc[ts])
+                if not a > 0:
+                    continue
+                tol = extreme_proximity_atr * a
+                if abs(lv.price - float(hi.loc[ts])) <= tol or abs(lv.price - float(lo.loc[ts])) <= tol:
+                    near = True
+                    break
+            if near:
+                kept.append(lv)
+        out = kept
+    if min_spacing_atr > 0:
+        yard = float(atr_series(daily, atr_period).median())
+        if yard > 0:
+            ordered = sorted(out, key=lambda lv: (len(lv.swing_prices), -lv.origin_wick_mult), reverse=True)
+            kept = []
+            for lv in ordered:
+                if all(abs(lv.price - k.price) >= min_spacing_atr * yard for k in kept):
+                    kept.append(lv)
+            out = sorted(kept, key=lambda lv: lv.formed_at)
+    return out

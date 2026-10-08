@@ -43,6 +43,10 @@ levels:
   tick_size: 0.0001          # price tick for the pair (clustering distance unit)
   min_swing_magnitude_atr: 0.3  # min swing size in ATR, else noise
   touch_tolerance_atr: 0.1   # close beyond this fraction of ATR = break (level dead)
+  min_swings_per_level: 1    # level must bundle this many swings (equal highs/lows); 1 = off
+  extreme_lookback: 0        # bars for rolling day-extremes; level must sit at one; 0 = off
+  extreme_proximity_atr: 0.25  # how close to the rolling extreme counts
+  min_level_spacing_atr: 0.0 # drop weaker of two levels closer than this x ATR; 0 = off
 
 sfp:
   wick_atr: 0.1              # min wick beyond level, in ATR

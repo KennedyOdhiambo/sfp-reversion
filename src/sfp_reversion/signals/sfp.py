@@ -15,7 +15,7 @@ import pandas as pd
 
 from sfp_reversion.config import get_config
 from sfp_reversion.confirmation.sfp import detect_sfp
-from sfp_reversion.levels.detection import atr_series, detect_levels
+from sfp_reversion.levels.detection import atr_series, detect_levels, filter_levels
 
 
 @dataclass
@@ -25,6 +25,10 @@ class SfpParams:
     tick_size: float = 0.0001
     min_swing_magnitude_atr: float = 0.3
     touch_tolerance_atr: float = 0.1
+    min_swings_per_level: int = 1
+    extreme_lookback: int = 0
+    extreme_proximity_atr: float = 0.25
+    min_level_spacing_atr: float = 0.0
     atr_period: int = 14
     wick_atr: float = 0.1
     close_inside_atr: float = 0.05
@@ -44,6 +48,10 @@ class SfpParams:
             tick_size=float(lvl.get("tick_size", 0.0001)),
             min_swing_magnitude_atr=float(lvl.get("min_swing_magnitude_atr", 0.3)),
             touch_tolerance_atr=float(lvl.get("touch_tolerance_atr", 0.1)),
+            min_swings_per_level=int(lvl.get("min_swings_per_level", 1)),
+            extreme_lookback=int(lvl.get("extreme_lookback", 0)),
+            extreme_proximity_atr=float(lvl.get("extreme_proximity_atr", 0.25)),
+            min_level_spacing_atr=float(lvl.get("min_level_spacing_atr", 0.0)),
             atr_period=int(cfg.get("atr.period", 14)),
             wick_atr=float(sfp.get("wick_atr", 0.1)),
             close_inside_atr=float(sfp.get("close_inside_atr", 0.05)),
@@ -87,6 +95,17 @@ def generate_sfp_signals(
             min_swing_magnitude_atr=params.min_swing_magnitude_atr,
         )
     if not levels or hourly.empty:
+        return _empty_signals()
+    levels = filter_levels(
+        levels,
+        daily,
+        min_swings=params.min_swings_per_level,
+        extreme_lookback=params.extreme_lookback,
+        extreme_proximity_atr=params.extreme_proximity_atr,
+        min_spacing_atr=params.min_level_spacing_atr,
+        atr_period=params.atr_period,
+    )
+    if not levels:
         return _empty_signals()
     resistances = sorted(lv.price for lv in levels if lv.kind == "resistance")
     supports = sorted(lv.price for lv in levels if lv.kind == "support")

@@ -83,6 +83,41 @@ def test_highs_and_lows_never_merge() -> None:
     assert kinds == ["resistance", "support"]
 
 
+def test_filter_min_swings_keeps_only_tested_shelves() -> None:
+    from sfp_reversion.levels.detection import filter_levels
+
+    df = _frame(
+        [1.10] * 6 + [1.08, 1.05, 1.08] + [1.10] * 6 + [1.0805, 1.0505, 1.0805] + [1.10] * 6
+    )
+    levels = detect_levels(df, lookback=LB, atr_period=3, cluster_ticks=10, tick_size=0.0001)
+    assert len(filter_levels(levels, df, min_swings=1)) == 1
+    assert len(filter_levels(levels, df, min_swings=2)) == 1
+    assert filter_levels(levels, df, min_swings=3) == []
+
+
+def test_filter_extremes_drops_stale_shelf() -> None:
+    from sfp_reversion.levels.detection import filter_levels
+
+    lows = [1.10] * 6 + [1.08, 1.05, 1.08] + [1.10 + 0.002 * i for i in range(25)]
+    df = _frame(lows)
+    levels = detect_levels(df, lookback=LB, atr_period=3, cluster_ticks=10, tick_size=0.0001)
+    supports = [lv for lv in levels if lv.kind == "support"]
+    assert len(supports) == 1
+    assert len(filter_levels(supports, df, extreme_lookback=30)) == 1  # still the min
+    assert filter_levels(supports, df, extreme_lookback=5) == []  # uptrend left it behind
+
+
+def test_filter_spacing_drops_weaker_neighbor() -> None:
+    from sfp_reversion.levels.detection import filter_levels
+
+    df = _frame([1.10] * 6 + [1.08, 1.05, 1.08] + [1.10] * 6 + [1.08, 1.04, 1.08] + [1.10] * 6)
+    levels = detect_levels(df, lookback=LB, atr_period=3, cluster_ticks=10, tick_size=0.0001)
+    supports = [lv for lv in levels if lv.kind == "support"]
+    assert len(supports) == 2
+    assert len(filter_levels(supports, df, min_spacing_atr=0.0)) == 2
+    assert len(filter_levels(supports, df, min_spacing_atr=1.0)) == 1
+
+
 def test_origin_wick_tracks_max_across_merged_swings() -> None:
     idx = pd.date_range("2024-01-01", periods=21, freq="D", tz="UTC")
     df = pd.DataFrame(
