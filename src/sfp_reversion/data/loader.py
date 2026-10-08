@@ -7,7 +7,6 @@ re-fetched, and a failed fetch degrades to cache.
 from __future__ import annotations
 
 import logging
-import os
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -20,7 +19,7 @@ from sfp_reversion.data.schema import concat_ohlc, empty_ohlc, validate_ohlc
 
 log = logging.getLogger(__name__)
 
-_TV_INTERVALS = {"D": "in_daily", "W": "in_weekly", "M": "in_monthly", "H4": "in_4_hour", "H1": "in_1_hour", "M5": "in_5_minute"}
+_TVWS_INTERVALS = {"D": "1D", "W": "1W", "M": "1M", "H4": "4H", "H1": "1H", "M5": "5"}
 
 Fetcher = Callable[[str, str, datetime | None, datetime | None], pd.DataFrame]
 
@@ -82,43 +81,25 @@ def fetch_tradingview(
     start: datetime | None,
     end: datetime | None,
 ) -> pd.DataFrame:
-    """Newest 5000 bars per pull (D -> 2007, H4 -> 2023, H1 -> ~7mo), merged into cache.
+    """Paged websocket history (own scraper): ~15mo H1 anonymously, Daily to 2007.
 
-    Unofficial websocket client; keyless for light use, or set TV_USERNAME /
-    TV_PASSWORD for an authenticated session.
+    Dates before the feed's reach simply return what's available; the cache
+    merge keeps everything ever fetched.
     """
-    if granularity not in _TV_INTERVALS:
+    if granularity not in _TVWS_INTERVALS:
         raise ValueError(f"Unsupported granularity for TradingView: {granularity}")
-    from tvDatafeed import Interval, TvDatafeed  # lazy: keeps imports light
+    from sfp_reversion.data.tvws import fetch_history, to_utc
 
     symbol, exchange = tv_symbol(pair)
-    username, password = os.environ.get("TV_USERNAME"), os.environ.get("TV_PASSWORD")
-    tv = TvDatafeed(username=username, password=password) if username else TvDatafeed()
-    interval = getattr(Interval, _TV_INTERVALS[granularity])
     try:
-        raw = tv.get_hist(symbol=symbol, exchange=exchange, interval=interval, n_bars=5000)
+        df = fetch_history(
+            f"{exchange}:{symbol}", _TVWS_INTERVALS[granularity], start=start, delay=1.0
+        )
     except Exception as exc:
         raise RuntimeError(f"TradingView fetch failed for {exchange}:{symbol}: {exc}") from exc
-    if raw is None or raw.empty:
+    if df.empty:
         return empty_ohlc()
-    return _parse_tradingview(raw)
-
-
-def _parse_tradingview(raw: pd.DataFrame) -> pd.DataFrame:
-    frame = pd.DataFrame(
-        {
-            "timestamp": pd.to_datetime(raw.index, utc=True),
-            "open": pd.to_numeric(raw["open"], errors="coerce"),
-            "high": pd.to_numeric(raw["high"], errors="coerce"),
-            "low": pd.to_numeric(raw["low"], errors="coerce"),
-            "close": pd.to_numeric(raw["close"], errors="coerce"),
-            "volume": pd.to_numeric(raw["volume"], errors="coerce").fillna(0.0),
-        }
-    )
-    frame = frame.dropna(subset=["open", "high", "low", "close"])
-    out = frame.set_index("timestamp").sort_index()[["open", "high", "low", "close", "volume"]]
-    out.index.name = "timestamp"
-    return validate_ohlc(out)
+    return validate_ohlc(to_utc(df))
 
 
 def _read_cache(path: Path) -> pd.DataFrame:

@@ -7,7 +7,7 @@ from typing import Any
 import pandas as pd
 import pytest
 
-from sfp_reversion.data.loader import _parse_tradingview, cache_path, load_ohlc, tv_symbol
+from sfp_reversion.data.loader import cache_path, load_ohlc, tv_symbol
 from sfp_reversion.data.schema import empty_ohlc
 
 
@@ -96,24 +96,6 @@ def test_symbol_mapping_defaults_and_overrides() -> None:
         tv_symbol("EURUSD")
 
 
-def test_parse_tradingview_frame() -> None:
-    raw = pd.DataFrame(
-        {
-            "symbol": ["OANDA:EURUSD"] * 3,
-            "open": [1.10, 1.11, None],
-            "high": [1.11, 1.12, 1.13],
-            "low": [1.09, 1.10, 1.11],
-            "close": [1.105, 1.115, 1.12],
-            "volume": [100.0, 200.0, 300.0],
-        },
-        index=pd.DatetimeIndex(["2024-01-01", "2024-01-02", "2024-01-03"]),
-    )
-    out = _parse_tradingview(raw)
-    assert len(out) == 2  # null-OHLC row dropped
-    assert str(out.index.tz) == "UTC"
-    assert out["volume"].iloc[0] == 100.0
-
-
 def test_granularity_override_uses_separate_cache(tmp_path: Path) -> None:
     out = load_ohlc(
         "EUR_USD",
@@ -133,6 +115,6 @@ def test_empty_frame_helper() -> None:
 
 
 def test_m5_is_supported_interval() -> None:
-    from sfp_reversion.data.loader import _TV_INTERVALS
+    from sfp_reversion.data.loader import _TVWS_INTERVALS
 
-    assert _TV_INTERVALS["M5"] == "in_5_minute"
+    assert _TVWS_INTERVALS["M5"] == "5"
