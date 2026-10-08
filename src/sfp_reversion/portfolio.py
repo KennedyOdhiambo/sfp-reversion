@@ -15,7 +15,7 @@ import pandas as pd
 
 from sfp_reversion.backtest.engine import BacktestParams, run_backtest
 from sfp_reversion.report.metrics_table import metrics_table
-from sfp_reversion.signals.decision_tree import DecisionTreeParams, generate_signals
+from sfp_reversion.signals.sfp import SfpParams, generate_sfp_signals
 from sfp_reversion.validation.significance import significance_report
 
 
@@ -30,15 +30,15 @@ class PortfolioResult:
 
 def run_portfolio(
     frames: dict[str, tuple[pd.DataFrame, pd.DataFrame]],
-    signal_params: DecisionTreeParams | None = None,
+    signal_params: SfpParams | None = None,
     backtest_params: BacktestParams | None = None,
     starting_equity: float = 10000.0,
 ) -> PortfolioResult:
-    signal_params = signal_params or DecisionTreeParams.from_config()
+    signal_params = signal_params or SfpParams.from_config()
     backtest_params = backtest_params or BacktestParams.from_config()
     per_symbol: dict[str, pd.DataFrame] = {}
     for symbol, (hourly, daily) in frames.items():
-        sig = generate_signals(hourly, daily, signal_params)
+        sig = generate_sfp_signals(hourly, daily, signal_params)
         res = run_backtest(hourly, sig, backtest_params)
         trades = res.trades_df.copy()
         trades["symbol"] = symbol

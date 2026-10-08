@@ -15,7 +15,7 @@ from sfp_reversion.config import get_config, setup_logging
 from sfp_reversion.data.loader import load_ohlc
 from sfp_reversion.portfolio import run_portfolio
 from sfp_reversion.report import metrics_table, plot_equity_curve
-from sfp_reversion.signals import DecisionTreeParams, generate_signals
+from sfp_reversion.signals import SfpParams, generate_sfp_signals
 from sfp_reversion.validation import (
     baseline_passes,
     run_random_baseline,
@@ -34,7 +34,7 @@ def _parser() -> argparse.ArgumentParser:
     f.add_argument("--start", default=None, help="YYYY-MM-DD")
     f.add_argument("--end", default=None, help="YYYY-MM-DD")
 
-    s = sub.add_parser("signals", help="Generate decision-tree signals")
+    s = sub.add_parser("signals", help="Generate Setup A (SFP) signals")
     s.add_argument("pair")
     s.add_argument("--out", default=None, help="CSV output path")
     s.add_argument("--start", default=None, help="YYYY-MM-DD")
@@ -91,7 +91,7 @@ def _cmd_fetch(args: argparse.Namespace) -> int:
 
 def _cmd_signals(args: argparse.Namespace) -> int:
     hourly, daily = _frames(args.pair)
-    sig = _in_window(generate_signals(hourly, daily), args.start, args.end)
+    sig = _in_window(generate_sfp_signals(hourly, daily), args.start, args.end)
     print(f"{len(sig)} signals")
     if not sig.empty:
         print(sig.to_string())
@@ -105,7 +105,7 @@ def _cmd_backtest(args: argparse.Namespace) -> int:
     cfg = get_config()
     hourly, daily = _frames(args.pair)
     params = BacktestParams.from_config()
-    sig = _in_window(generate_signals(hourly, daily), args.start, args.end)
+    sig = _in_window(generate_sfp_signals(hourly, daily), args.start, args.end)
     res = run_backtest(hourly, sig, params)
     print(metrics_table(res.trades_df, res.equity_curve, params.min_equity).to_string(index=False))
     out_dir = Path(args.out_dir or cfg.get("report.output_dir", "reports"))
@@ -121,13 +121,13 @@ def _cmd_validate(args: argparse.Namespace) -> int:
     cfg = get_config()
     wf = cfg.section("validation").get("walk_forward", {})
     hourly, daily = _frames(args.pair)
-    params, bt = DecisionTreeParams.from_config(), BacktestParams.from_config()
+    params, bt = SfpParams.from_config(), BacktestParams.from_config()
 
     if args.parameter:
         values = args.values or [0.05, 0.1, 0.15, 0.2]
 
         def run(v: float) -> float:
-            sig = generate_signals(hourly, daily, replace(params, **{args.parameter: v}))
+            sig = generate_sfp_signals(hourly, daily, replace(params, **{args.parameter: v}))
             res = run_backtest(hourly, sig, bt)
             return float(res.trades_df["pnl"].sum()) if not res.trades_df.empty else 0.0
 
@@ -142,7 +142,7 @@ def _cmd_validate(args: argparse.Namespace) -> int:
 
         h = pd.concat([is_h, oos_h])
         d = pd.concat([is_d, oos_d]) if not is_d.empty else oos_d
-        sig = generate_signals(h, d, params)
+        sig = generate_sfp_signals(h, d, params)
         sig = sig[sig["timestamp"] >= oos_h.index[0]]
         res = run_backtest(h, sig, bt)
         n = len(res.trades_df)
