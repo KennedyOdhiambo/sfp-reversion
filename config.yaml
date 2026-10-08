@@ -1,5 +1,5 @@
 # SFP Reversion strategy — all tunable parameters live here, never in code.
-# Every parameter in this file is a candidate for walk-forward sweeps (plan.md §5/Phase 13).
+# Tunables are judged by walk-forward OOS. Spec: strategy.md.
 
 data:
   cache_dir: data/cache      # parquet cache, relative to project root

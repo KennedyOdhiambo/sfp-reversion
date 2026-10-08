@@ -17,3 +17,7 @@ data/
 
 # Reports and plots (generated artifacts)
 reports/
+
+# Research scratch (web notes, never commit)
+tmp/
+

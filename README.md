@@ -25,7 +25,8 @@ the prior bar so violent bars never set their own hurdles.
 
 ```
 config.yaml                  # every tunable number (strategy never hardcodes)
-plan.md                      # strategy spec + phased build plan (source of truth)
+philosophy.md                # background + principles (why)
+strategy.md                  # Setup A (SFP) spec — the tradable rules
 src/sfp_reversion/
   config.py                  # typed config reader
   data/                      # OHLC schema (the contract) + TradingView loader + parquet cache
