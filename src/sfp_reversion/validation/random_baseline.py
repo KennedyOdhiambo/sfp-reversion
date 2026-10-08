@@ -31,7 +31,7 @@ def random_signals(
     tradable = tradable[(tradable >= 1) & (tradable < len(df) - max_hold_bars - 1)]
     if len(tradable) == 0:
         return pd.DataFrame(
-            columns=["timestamp", "direction", "limit_price", "stop_price", "target_price"]
+            columns=["timestamp", "direction", "entry_price", "stop_price", "target_price"]
         )
     picks = rng.choice(tradable, size=min(n, len(tradable)), replace=False)
     closes = df["close"].to_numpy()
@@ -48,7 +48,7 @@ def random_signals(
             {
                 "timestamp": df.index[p],
                 "direction": direction,
-                "limit_price": entry,  # market-ish: fills next bar almost surely
+                "entry_price": entry,  # reference only: engine fills at next open
                 "stop_price": stop,
                 "target_price": target,
             }

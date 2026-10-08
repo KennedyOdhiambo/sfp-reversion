@@ -1,4 +1,4 @@
-"""Phase 11 tests: hand-worked fills, exits, costs, sizing."""
+"""Setup A backtest tests: market fills, stop-first exits, warning exit, costs."""
 
 import pandas as pd
 import pytest
@@ -20,112 +20,116 @@ def _frame(rows: list[tuple[float, float, float, float]]) -> pd.DataFrame:
 
 
 def _sig(
-    ts: pd.Timestamp, direction: str, limit: float, stop: float, target: float
+    ts: pd.Timestamp,
+    direction: str,
+    stop: float,
+    target: float,
+    sweep_extreme: float | None = None,
 ) -> pd.DataFrame:
-    return pd.DataFrame(
-        [
-            {
-                "timestamp": ts,
-                "direction": direction,
-                "limit_price": limit,
-                "stop_price": stop,
-                "target_price": target,
-            }
-        ]
-    )
+    row: dict = {
+        "timestamp": ts,
+        "direction": direction,
+        "entry_price": 0.0,  # reference only: engine fills at next open
+        "stop_price": stop,
+        "target_price": target,
+    }
+    if sweep_extreme is not None:
+        row["sweep_extreme"] = sweep_extreme
+    return pd.DataFrame([row])
 
 
-def test_target_and_stop_with_exact_pnl() -> None:
+def test_market_fill_at_next_open_with_exact_pnl() -> None:
     df = _frame(
         [
-            (1.1000, 1.1010, 1.0990, 1.1000),  # 0: signal bar
-            (1.0990, 1.1010, 1.0980, 1.1005),  # 1: fills long @ 1.0990
-            (1.1010, 1.1120, 1.1000, 1.1110),  # 2: target 1.11
-            (1.1090, 1.1095, 1.1070, 1.1080),  # 3: signal bar (flat after exit)
-            (1.1090, 1.1095, 1.1070, 1.1080),  # 4: fills short @ 1.1090
-            (1.1070, 1.1080, 1.0990, 1.1010),  # 5: target 1.10
+            (1.1000, 1.1010, 1.0990, 1.1000),  # signal bar
+            (1.1000, 1.1120, 1.0990, 1.1110),  # entry 1.10, target 1.11 hit
+            (1.1110, 1.1120, 1.1100, 1.1110),
         ]
     )
-    signals = pd.concat(
-        [
-            _sig(df.index[0], "long", 1.1000, 1.0950, 1.1100),
-            _sig(df.index[3], "short", 1.1080, 1.1120, 1.1000),
-        ]
-    )
-    res = run_backtest(df, signals, FREE)
-    assert len(res.trades_df) == 2
-
-    long, short = res.trades_df.iloc[0], res.trades_df.iloc[1]
-    assert long["entry_price"] == pytest.approx(1.0990)
-    assert long["units"] == pytest.approx(100.0 / 0.004)  # 1% of 10k over 0.004 risk
-    assert long["exit_price"] == pytest.approx(1.1100)
-    assert long["pnl"] == pytest.approx(0.011 * 25000.0)
-    assert long["exit_reason"] == "target"
-
-    assert short["entry_price"] == pytest.approx(1.1090)
-    assert short["units"] == pytest.approx(102.75 / 0.003)  # equity grew to 10275
-    assert short["pnl"] == pytest.approx(0.009 * 34250.0)
-    assert short["exit_reason"] == "target"
-    assert res.equity_curve.iloc[-1] == pytest.approx(10000.0 + 275.0 + 308.25)
-
-
-def test_costs_shift_the_fill() -> None:
-    df = _frame(
-        [
-            (1.1000, 1.1010, 1.0990, 1.1000),
-            (1.0990, 1.1010, 1.0980, 1.1005),
-            (1.1010, 1.1010, 1.1010, 1.1010),
-        ]
-    )
-    params = BacktestParams(spread_pips=2.0, slippage_pips=1.0, pip_size=0.0001)
-    res = run_backtest(
-        df, _sig(df.index[0], "long", 1.1000, 1.0900, 1.2000), params, max_hold_bars=1
-    )
-    assert res.trades_df.iloc[0]["entry_price"] == pytest.approx(1.0990 + 0.0003)
-
-
-def test_stop_first_and_timeout() -> None:
-    df = _frame(
-        [
-            (1.1000, 1.1010, 1.0990, 1.1000),  # 0: signal
-            (1.0990, 1.1200, 1.0900, 1.1100),  # 1: fills; spans stop AND target
-            (1.1100, 1.1110, 1.1090, 1.1100),  # 2: filler
-        ]
-    )
-    res = run_backtest(df, _sig(df.index[0], "long", 1.1000, 1.0950, 1.1100), FREE)
-    assert res.trades_df.iloc[0]["exit_reason"] == "stop"  # worst-case priority
-    assert res.trades_df.iloc[0]["exit_price"] == pytest.approx(1.0950)
-
-    res = run_backtest(df, _sig(df.index[0], "long", 1.1000, 1.0800, 1.2000), FREE, max_hold_bars=1)
-    assert res.trades_df.iloc[0]["exit_reason"] == "timeout"
-    assert res.trades_df.iloc[0]["exit_ts"] == df.index[2]
-
-
-def test_no_fill_no_trade_and_single_position() -> None:
-    df = _frame(
-        [
-            (1.1000, 1.1010, 1.0990, 1.1000),
-            (1.1050, 1.1060, 1.1040, 1.1050),  # never touches 1.10 limit
-            (1.1050, 1.1060, 1.1040, 1.1050),
-        ]
-    )
-    res = run_backtest(df, _sig(df.index[0], "long", 1.1000, 1.0900, 1.2000), FREE)
-    assert res.trades_df.empty
-    assert (res.equity_curve == 10000.0).all()
-
-    df2 = _frame(
-        [
-            (1.1000, 1.1010, 1.0990, 1.1000),  # 0: signal 1
-            (1.0990, 1.1010, 1.0980, 1.1005),  # 1: fills; signal 2 ignored
-            (1.1000, 1.1010, 1.0990, 1.1000),  # 2: still open
-            (1.1000, 1.1010, 1.0990, 1.1000),  # 3: timeout close
-        ]
-    )
-    two = pd.concat(
-        [
-            _sig(df2.index[0], "long", 1.1000, 1.0800, 1.2000),
-            _sig(df2.index[1], "long", 1.1000, 1.0800, 1.2000),
-        ]
-    )
-    res = run_backtest(df2, two, FREE, max_hold_bars=2)
+    res = run_backtest(df, _sig(df.index[0], "long", 1.0950, 1.1100), FREE)
     assert len(res.trades_df) == 1
+    t = res.trades_df.iloc[0]
+    assert t["entry_price"] == 1.1000
+    assert t["exit_reason"] == "target"
+    # risk 0.005 -> 20000 units; reward 0.01 -> pnl 200
+    assert t["units"] == pytest.approx(20000.0)
+    assert t["pnl"] == pytest.approx(200.0)
+
+
+def test_stop_wins_same_bar_ambiguity() -> None:
+    df = _frame(
+        [
+            (1.1000, 1.1010, 1.0990, 1.1000),
+            (1.1000, 1.1150, 1.0900, 1.1120),  # touches both: stop first
+            (1.1120, 1.1130, 1.1110, 1.1120),
+        ]
+    )
+    res = run_backtest(df, _sig(df.index[0], "long", 1.0950, 1.1100), FREE)
+    t = res.trades_df.iloc[0]
+    assert t["exit_reason"] == "stop"
+    assert t["pnl"] == pytest.approx(-100.0)  # -0.005 x 20000 units
+
+
+def test_warning_exit_on_close_through_extreme() -> None:
+    df = _frame(
+        [
+            (1.1000, 1.1010, 1.0980, 1.1005),  # signal bar
+            (1.1005, 1.1020, 1.0995, 1.1010),  # entry, nothing hit
+            (1.1010, 1.1015, 1.0996, 1.0985),  # close < sweep extreme 1.0990? no...
+            (1.0985, 1.0990, 1.0970, 1.0975),  # close 1.0975 < 1.0980 extreme
+        ]
+    )
+    sig = _sig(df.index[0], "long", 1.0940, 1.1100, sweep_extreme=1.0980)
+    res = run_backtest(df, sig, FREE)
+    t = res.trades_df.iloc[0]
+    assert t["exit_reason"] == "warning"
+    assert t["exit_ts"] == df.index[3]
+
+
+def test_no_warning_without_sweep_extreme() -> None:
+    df = _frame(
+        [
+            (1.1000, 1.1010, 1.0980, 1.1005),
+            (1.1005, 1.1020, 1.0995, 1.1010),
+            (1.1010, 1.1015, 1.0996, 1.0975),  # would warn, but no extreme carried
+            (1.0975, 1.0980, 1.0970, 1.0978),
+        ]
+    )
+    sig = _sig(df.index[0], "long", 1.0940, 1.1100)
+    res = run_backtest(df, sig, FREE, max_hold_bars=120)
+    assert res.trades_df.iloc[0]["exit_reason"] != "warning"
+
+
+def test_costs_shift_fill_against_trader() -> None:
+    pricey = BacktestParams(
+        spread_pips=10.0, slippage_pips=0.0, pip_size=0.0001, risk_per_trade_pct=1.0,
+        min_equity=10000.0,
+    )
+    df = _frame(
+        [
+            (1.1000, 1.1010, 1.0990, 1.1000),
+            (1.1000, 1.1120, 1.0990, 1.1110),
+            (1.1110, 1.1120, 1.1100, 1.1110),
+        ]
+    )
+    res = run_backtest(df, _sig(df.index[0], "long", 1.0950, 1.1100), pricey)
+    t = res.trades_df.iloc[0]
+    assert t["entry_price"] == 1.1010  # open + 10-pip cost
+    assert t["pnl"] < 200.0
+
+
+def test_one_position_at_a_time() -> None:
+    df = _frame(
+        [
+            (1.1000, 1.1010, 1.0990, 1.1000),
+            (1.1000, 1.1010, 1.0990, 1.1000),
+            (1.1000, 1.1120, 1.0990, 1.1110),
+            (1.1110, 1.1120, 1.1100, 1.1110),
+        ]
+    )
+    sigs = pd.concat(
+        [_sig(df.index[0], "long", 1.0950, 1.1100), _sig(df.index[0], "short", 1.1050, 1.0900)]
+    )
+    res = run_backtest(df, sigs, FREE)
+    assert len(res.trades_df) == 1
+    assert res.trades_df.iloc[0]["direction"] == "long"

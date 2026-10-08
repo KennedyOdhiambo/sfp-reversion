@@ -1,9 +1,9 @@
-"""Backtest engine (Phase 11): limit fills, stop/target exits, costs, sizing.
+"""Setup A backtest: market entries, stop/target/warning exits, costs, sizing.
 
-A signal at bar ``t`` executes from bar ``t+1``. Fills only if the execution
-bar actually trades through the limit. Exits scan stop-first (worst-case for
-same-bar ambiguity), then target, then a max-hold timeout at the close.
-One position at a time; open-trade MTM is ignored in the equity curve.
+A signal at bar ``t`` fills at bar ``t+1``'s open (no lookahead) plus costs.
+Each bar checks exits in order: stop (worst case first), target, warning-sign
+close back through the sweep extreme, timeout. One position at a time; the
+warning exit applies only when the signal carries ``sweep_extreme``.
 """
 
 from __future__ import annotations
@@ -23,6 +23,7 @@ class BacktestParams:
     pip_size: float = 0.0001
     risk_per_trade_pct: float = 1.0
     min_equity: float = 10000.0
+    max_hold_bars: int = 120
 
     @classmethod
     def from_config(cls) -> BacktestParams:
@@ -33,6 +34,7 @@ class BacktestParams:
             pip_size=float(bt.get("pip_size", 0.0001)),
             risk_per_trade_pct=float(bt.get("risk_per_trade_pct", 1.0)),
             min_equity=float(bt.get("min_equity", 10000)),
+            max_hold_bars=int(bt.get("max_hold_bars", 120)),
         )
 
 
@@ -46,9 +48,10 @@ def run_backtest(
     df: pd.DataFrame,
     signals: pd.DataFrame,
     params: BacktestParams | None = None,
-    max_hold_bars: int = 120,
+    max_hold_bars: int | None = None,
 ) -> BacktestResult:
     params = params or BacktestParams.from_config()
+    max_hold = params.max_hold_bars if max_hold_bars is None else max_hold_bars
     empty_trades = pd.DataFrame(
         columns=[
             "signal_ts",
@@ -78,7 +81,7 @@ def run_backtest(
         ts = df.index[i]
         bar = df.iloc[i]
         if open_pos is not None:
-            outcome = _check_exit(open_pos, bar, i, max_hold_bars)
+            outcome = _check_exit(open_pos, bar, i, max_hold)
             if outcome is not None:
                 exit_price, reason = outcome
                 signed = 1.0 if open_pos["direction"] == "long" else -1.0
@@ -100,9 +103,7 @@ def run_backtest(
                 if i + 1 >= len(df):
                     break
                 nxt = df.iloc[i + 1]
-                fill = _fill_price(str(s["direction"]), float(s["limit_price"]), nxt, cost)
-                if fill is None:
-                    continue
+                fill = _fill_price(str(s["direction"]), nxt, cost)
                 risk_dist = abs(float(s["stop_price"]) - fill)
                 if not risk_dist > 0:
                     continue
@@ -114,8 +115,15 @@ def run_backtest(
                     "entry_price": fill,
                     "stop_price": float(s["stop_price"]),
                     "target_price": float(s["target_price"]),
-                    "units": equity * params.risk_per_trade_pct / 100.0 / risk_dist,
+                    "sweep_extreme": (
+                        float(s["sweep_extreme"])
+                        if "sweep_extreme" in s and pd.notna(s["sweep_extreme"])
+                        else None
+                    ),
                 }
+                open_pos["units"] = (
+                    equity * params.risk_per_trade_pct / 100.0 / risk_dist
+                )
                 break  # one position at a time
     if open_pos is not None:  # force-close at the final close
         signed = 1.0 if open_pos["direction"] == "long" else -1.0
@@ -135,18 +143,14 @@ def run_backtest(
     equity_at.iloc[0] = params.min_equity
     curve = equity_at.ffill()
     curve.name = "equity"
-    trades_df = pd.DataFrame(trades).drop(columns=["entry_idx"]) if trades else empty_trades
+    trades_df = pd.DataFrame(trades).drop(columns=["entry_idx", "sweep_extreme"]) if trades else empty_trades
     return BacktestResult(trades_df, curve)
 
 
-def _fill_price(direction: str, limit: float, bar: pd.Series, cost: float) -> float | None:
+def _fill_price(direction: str, bar: pd.Series, cost: float) -> float:
     if direction == "long":
-        if bar["low"] > limit:
-            return None
-        return min(float(bar["open"]), limit) + cost
-    if bar["high"] < limit:
-        return None
-    return max(float(bar["open"]), limit) - cost
+        return float(bar["open"]) + cost
+    return float(bar["open"]) - cost
 
 
 def _check_exit(
@@ -157,11 +161,15 @@ def _check_exit(
             return pos["stop_price"], "stop"
         if bar["high"] >= pos["target_price"]:
             return pos["target_price"], "target"
+        if pos["sweep_extreme"] is not None and bar["close"] < pos["sweep_extreme"]:
+            return float(bar["close"]), "warning"
     else:
         if bar["high"] >= pos["stop_price"]:
             return pos["stop_price"], "stop"
         if bar["low"] <= pos["target_price"]:
             return pos["target_price"], "target"
+        if pos["sweep_extreme"] is not None and bar["close"] > pos["sweep_extreme"]:
+            return float(bar["close"]), "warning"
     if i - pos["entry_idx"] >= max_hold_bars:
         return float(bar["close"]), "timeout"
     return None
