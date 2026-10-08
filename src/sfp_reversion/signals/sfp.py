@@ -73,17 +73,19 @@ def generate_sfp_signals(
     hourly: pd.DataFrame,
     daily: pd.DataFrame,
     params: SfpParams | None = None,
+    levels: list | None = None,
 ) -> pd.DataFrame:
     """Scan each daily level for its first clean H1 SFP. One row per signal."""
     params = params or SfpParams.from_config()
-    levels = detect_levels(
-        daily,
-        lookback=params.swing_lookback,
-        cluster_ticks=params.cluster_ticks,
-        tick_size=params.tick_size,
-        atr_period=params.atr_period,
-        min_swing_magnitude_atr=params.min_swing_magnitude_atr,
-    )
+    if levels is None:
+        levels = detect_levels(
+            daily,
+            lookback=params.swing_lookback,
+            cluster_ticks=params.cluster_ticks,
+            tick_size=params.tick_size,
+            atr_period=params.atr_period,
+            min_swing_magnitude_atr=params.min_swing_magnitude_atr,
+        )
     if not levels or hourly.empty:
         return _empty_signals()
     resistances = sorted(lv.price for lv in levels if lv.kind == "resistance")
