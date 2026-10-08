@@ -83,6 +83,27 @@ def test_highs_and_lows_never_merge() -> None:
     assert kinds == ["resistance", "support"]
 
 
+def test_origin_wick_tracks_max_across_merged_swings() -> None:
+    idx = pd.date_range("2024-01-01", periods=21, freq="D", tz="UTC")
+    df = pd.DataFrame(
+        {"open": 1.10, "high": 1.12, "low": 1.10, "close": 1.10, "volume": 0.0}, index=idx
+    )
+    df.index.name = "timestamp"
+    # valley 1 with a 0.01 lower wick
+    df.loc[idx[7], ["open", "high", "low", "close"]] = [1.06, 1.07, 1.05, 1.06]
+    df.loc[idx[6], ["low"]] = 1.08
+    df.loc[idx[8], ["low"]] = 1.08
+    # valley 2 nearby, no wick
+    df.loc[idx[14], ["open", "high", "low", "close"]] = [1.0505, 1.0705, 1.0505, 1.0505]
+    df.loc[idx[13], ["low"]] = 1.0805
+    df.loc[idx[15], ["low"]] = 1.0805
+    df = validate_ohlc(df)
+    levels = detect_levels(df, lookback=LB, atr_period=3, cluster_ticks=10, tick_size=0.0001)
+    supports = [lv for lv in levels if lv.kind == "support"]
+    assert len(supports) == 1
+    assert supports[0].origin_wick == pytest.approx(0.01)
+
+
 def test_atr_warmup_and_positivity() -> None:
     df = _frame([1.10 + 0.01 * (i % 3) for i in range(30)])
     atr = atr_series(df, period=5)

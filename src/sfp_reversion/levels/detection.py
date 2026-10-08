@@ -71,14 +71,16 @@ class Level:
     kind: str  # "support" | "resistance"
     formed_at: pd.Timestamp
     swing_prices: list[float] = field(default_factory=list)
+    origin_wick: float = 0.0  # max wick of the forming swing(s), price units
 
     @property
     def touches(self) -> int:
         return len(self.swing_prices)
 
-    def add_swing(self, price: float) -> None:
+    def add_swing(self, price: float, wick: float = 0.0) -> None:
         self.swing_prices.append(price)
         self.price = float(np.mean(self.swing_prices))
+        self.origin_wick = max(self.origin_wick, wick)
 
 
 def detect_levels(
@@ -95,6 +97,12 @@ def detect_levels(
     for ts, row in swings.iterrows():
         price = float(row["price"])
         kind = "resistance" if row["kind"] == "high" else "support"
+        bar = df.loc[ts]
+        if kind == "resistance":
+            wick = float(bar["high"]) - max(float(bar["open"]), float(bar["close"]))
+        else:
+            wick = min(float(bar["open"]), float(bar["close"])) - float(bar["low"])
+        wick = max(wick, 0.0)
         best: Level | None = None
         best_dist = float("inf")
         for level in levels:
@@ -104,7 +112,9 @@ def detect_levels(
             if dist <= cluster_ticks * tick_size and dist < best_dist:
                 best, best_dist = level, dist
         if best is None:
-            levels.append(Level(price=price, kind=kind, formed_at=ts, swing_prices=[price]))
+            levels.append(
+                Level(price=price, kind=kind, formed_at=ts, swing_prices=[price], origin_wick=wick)
+            )
         else:
-            best.add_swing(price)
+            best.add_swing(price, wick)
     return levels
