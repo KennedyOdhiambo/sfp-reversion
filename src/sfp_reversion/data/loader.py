@@ -20,7 +20,7 @@ from sfp_reversion.data.schema import concat_ohlc, empty_ohlc, validate_ohlc
 
 log = logging.getLogger(__name__)
 
-_TV_INTERVALS = {"D": "in_daily", "W": "in_weekly", "M": "in_monthly", "H4": "in_4_hour", "H1": "in_1_hour"}
+_TV_INTERVALS = {"D": "in_daily", "W": "in_weekly", "M": "in_monthly", "H4": "in_4_hour", "H1": "in_1_hour", "M5": "in_5_minute"}
 
 Fetcher = Callable[[str, str, datetime | None, datetime | None], pd.DataFrame]
 

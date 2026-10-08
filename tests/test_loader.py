@@ -130,3 +130,9 @@ def test_granularity_override_uses_separate_cache(tmp_path: Path) -> None:
 
 def test_empty_frame_helper() -> None:
     assert empty_ohlc().empty
+
+
+def test_m5_is_supported_interval() -> None:
+    from sfp_reversion.data.loader import _TV_INTERVALS
+
+    assert _TV_INTERVALS["M5"] == "in_5_minute"
