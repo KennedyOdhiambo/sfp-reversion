@@ -102,6 +102,7 @@ def test_origin_wick_tracks_max_across_merged_swings() -> None:
     supports = [lv for lv in levels if lv.kind == "support"]
     assert len(supports) == 1
     assert supports[0].origin_wick == pytest.approx(0.01)
+    assert supports[0].origin_wick_mult > 0.0
 
 
 def test_atr_warmup_and_positivity() -> None:

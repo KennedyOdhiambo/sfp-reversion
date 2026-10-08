@@ -98,8 +98,10 @@ def test_genuine_break_kills_level() -> None:
 
 def test_messy_origin_shelf_skipped() -> None:
     hourly = _hourly(special={60: (1.0950, 1.0970, 1.0890, 1.0905)})
-    daily = _daily(valley_wick=0.01)  # origin wick 2.5 x ATR(0.004) > 1.0
-    assert generate_sfp_signals(hourly, daily, _params()).empty
+    # origin wick 0.02 ~= 1.0 x daily ATR -> over a 0.9 cap it skips
+    daily = _daily(valley_wick=0.02)
+    assert generate_sfp_signals(hourly, daily, _params(max_origin_wick_atr=0.9)).empty
+    assert not generate_sfp_signals(hourly, daily, _params()).empty
 
 
 def test_min_reward_risk_filter_skips() -> None:

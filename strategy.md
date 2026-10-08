@@ -15,7 +15,7 @@ Fade the first clean failed break of an obvious swing level: wick beyond, body c
 - **Level:** swing prices within `cluster_ticks = 10 ticks` merge into one level at their mean. A level is known only from its confirmation bar onward (forming bar + N). No lookahead.
 - **Sweep:** a closed H1 bar whose wick trades beyond the level (high > level for shorts, low < level for longs) by at least `wick_atr = 0.1 × ATR`.
 - **SFP confirm (the close):** the same bar closes back inside by at least `close_inside_atr = 0.05 × ATR` (close < level for shorts, close > level for longs). Wick without this close = NOT an SFP = no trade, full stop.
-- **Original-wick filter:** the swing that created the level must not have a "very long" wick → `max_origin_wick_atr (tunable, start 1.0 × ATR)`. Blown-out origin = messy shelf = skip.
+- **Original-wick filter:** the swing that created the level must not have a "very long" wick → `max_origin_wick_atr (tunable, start 1.0 × ATR)`, measured in **daily ATR at formation** (same timeframe as the swing — hourly ATR would mis-scale it). Blown-out origin = messy shelf = skip.
 - **Break (level death):** a close beyond the level by more than `touch_tolerance_atr = 0.1 × ATR` that is NOT an SFP close deactivates the level for Setup A. (We fade the first clean failure, not a level being chewed through.)
 - **ATR:** Wilder ATR(14) on the trigger timeframe, read through the prior bar so a violent bar never sets its own hurdle.
 

@@ -151,9 +151,9 @@ def _try_signal(
     supports: list[float],
     params: SfpParams,
 ) -> dict[str, Any] | None:
-    origin_mult = level.origin_wick / atr
+    origin_mult = level.origin_wick_mult
     if params.max_origin_wick_atr > 0 and origin_mult > params.max_origin_wick_atr:
-        return None  # messy shelf
+        return None  # messy shelf (origin wick in daily ATR at formation)
     entry = close
     buf = params.stop_buffer_atr * atr
     if direction == "long":

@@ -72,15 +72,17 @@ class Level:
     formed_at: pd.Timestamp
     swing_prices: list[float] = field(default_factory=list)
     origin_wick: float = 0.0  # max wick of the forming swing(s), price units
+    origin_wick_mult: float = 0.0  # same, in daily ATR at formation
 
     @property
     def touches(self) -> int:
         return len(self.swing_prices)
 
-    def add_swing(self, price: float, wick: float = 0.0) -> None:
+    def add_swing(self, price: float, wick: float = 0.0, wick_mult: float = 0.0) -> None:
         self.swing_prices.append(price)
         self.price = float(np.mean(self.swing_prices))
         self.origin_wick = max(self.origin_wick, wick)
+        self.origin_wick_mult = max(self.origin_wick_mult, wick_mult)
 
 
 def detect_levels(
@@ -93,6 +95,7 @@ def detect_levels(
 ) -> list[Level]:
     """Cluster same-kind swings within ``cluster_ticks`` ticks into levels, oldest first."""
     swings = swing_points(df, lookback, atr_period, min_swing_magnitude_atr)
+    formation_atr = atr_series(df, atr_period)
     levels: list[Level] = []
     for ts, row in swings.iterrows():
         price = float(row["price"])
@@ -103,6 +106,8 @@ def detect_levels(
         else:
             wick = min(float(bar["open"]), float(bar["close"])) - float(bar["low"])
         wick = max(wick, 0.0)
+        base = float(formation_atr.loc[ts])
+        wick_mult = wick / base if base > 0 else 0.0
         best: Level | None = None
         best_dist = float("inf")
         for level in levels:
@@ -113,8 +118,15 @@ def detect_levels(
                 best, best_dist = level, dist
         if best is None:
             levels.append(
-                Level(price=price, kind=kind, formed_at=ts, swing_prices=[price], origin_wick=wick)
+                Level(
+                    price=price,
+                    kind=kind,
+                    formed_at=ts,
+                    swing_prices=[price],
+                    origin_wick=wick,
+                    origin_wick_mult=wick_mult,
+                )
             )
         else:
-            best.add_swing(price, wick)
+            best.add_swing(price, wick, wick_mult)
     return levels
