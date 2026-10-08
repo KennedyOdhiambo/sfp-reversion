@@ -1,19 +1,20 @@
-# SFP Reversion — FX Mean-Reversion Algorithmic Trading System
+# SFP Reversion — FX Swing-Failure Algorithmic Trading System
 
-Systematic version of a discretionary FX strategy: fade key support/resistance levels,
-confirmed by Swing Failure Patterns (SFP) and MACD divergence. Daily chart decides
-*where* (levels, trend bias); hourly chart decides *when* (touches, triggers, entries).
-Price data: TradingView feed (OANDA venue).
+Systematic version of Trader Dante's Setup A: fade the first clean failed break
+of an obvious daily support/resistance level (wick beyond, body closes back
+inside → Swing Failure Pattern on H1). Daily decides *where*; hourly decides
+*when*. Price data: TradingView feed (OANDA venue).
 
-Core thesis: levels tested fewer times reverse more reliably than exhausted ones.
-Touch count grades the setup; retest count gates the confirmation; both gates must pass.
+Core thesis: an obvious level's first clean failure traps breakout chasers and
+reverses; chewed-through levels and messy shelves are skipped, not faded.
 
 ## Pipeline
 
 ```
-TradingView feed → cache → daily levels → hourly touch/retest tracking
-  → confluence votes (D1 bias, fib, ATR stretch) → SFP / MACD confirmation
-  → decision tree (orders: limit/stop/target) → backtest engine
+TradingView feed → cache → daily levels (fractal swings, clustered)
+  → H1 SFP scan (sweep + close + origin-wick + min-R filters, break-death)
+  → market orders (entry/stop/target) → backtest engine (next-open fills,
+     stop-first exits, warning-sign exit, costs, 1%-risk sizing)
   → falsification gate → walk-forward / significance / sensitivity → reports
 ```
 
@@ -30,15 +31,14 @@ strategy.md                  # Setup A (SFP) spec — the tradable rules
 src/sfp_reversion/
   config.py                  # typed config reader
   data/                      # OHLC schema (the contract) + TradingView loader + parquet cache
-  levels/                    # swing detection, level clustering, touch/retest timelines
-  confluence/                # d1_bias, fib_levels, atr_extension
-  confirmation/              # sfp, macd_divergence
-  signals/                   # decision_tree: daily levels + hourly entries → orders
-  backtest/                  # limit fills, stop-first exits, costs, 1%-risk sizing
+  levels/                    # fractal swings, clustered levels, origin-wick tracking
+  confirmation/              # SFP trigger (sweep + close back inside)
+  signals/                   # sfp: daily levels + H1 SFP → market orders
+  backtest/                  # next-open fills, stop-first exits, warning exit, costs, 1%-risk sizing
   validation/                # random_baseline, walk_forward, significance, sensitivity
   report/                    # metrics table + equity-curve plot
-  cli.py                     # fetch / signals / backtest / validate
-tests/                       # 85+ checks, one file per module
+  cli.py                     # fetch / signals / backtest / validate / portfolio
+tests/                       # one file per module (Setup A only)
 data/cache/                  # local parquet (ignored by git, re-fetchable)
 reports/                     # generated plots (ignored by git)
 ```
@@ -66,7 +66,7 @@ uv run sfp-reversion backtest EUR_USD --start 2025-01-01 --end 2025-12-31
 
 # walk-forward, or sweep one parameter (robust vs knife-edge verdict)
 uv run sfp-reversion validate EUR_USD --start 2025-01-01 --end 2025-12-31
-uv run sfp-reversion validate EUR_USD --parameter touch_tolerance_atr --values 0.05 0.1 0.15 0.2
+uv run sfp-reversion validate EUR_USD --parameter wick_atr --values 0.05 0.1 0.15 0.2
 ```
 
 Any TradingView-covered pair works (`EUR_USD`, `GBP_USD`, `USD_JPY`, …); add odd symbols
@@ -93,24 +93,25 @@ Notebooks import the same modules as the CLI — exploration here, verdicts ther
 ## Configuration
 
 All strategy numbers live in `config.yaml` and are read at runtime — tune config,
-never code. Key sections: `levels` (swings, tolerance, exhaustion), `confluence`,
-`confirmation` (SFP, MACD), `signal` (gates, reward:risk, stops/targets),
-`backtest` (costs, risk %), `validation` (windows, trials).
+never code. Key sections: `levels` (swings, clustering, break tolerance),
+`sfp` (wick/close/origin filters, stop buffer, fallback target, min-R),
+`backtest` (costs, risk %, max hold), `validation` (windows, trials).
 
 ## Current status (honest)
 
-End-to-end system complete and verified: 85+ tests green, falsification gate passes
-(random entries show no edge → engine is honest), truncation probe passes.
-On ~2y EUR/USD hourly at plan defaults: 27 signals → 8 trades. Money numbers are
-noise-scale — the gates as written are highly selective (SFP + min-reward-risk bind
-hardest). No edge claimed; the system correctly reports insufficient evidence.
+End-to-end Setup A system complete and verified: 70 tests green, falsification
+gate passes (random entries show no edge → engine is honest).
+On ~2y EUR/USD hourly at defaults: 7 signals → 7 trades, net −315 (2/7 wins).
+Noise-scale — no edge claimed; the system correctly reports insufficient
+evidence. Frequency is the binding constraint: most daily levels are either
+long dead or never swept on H1 before they break.
 
 ## Roadmap
 
 1. **Volume** — hourly data for 3–4 majors; full daily history for levels.
-2. **Tuning** — loosen the gate stack (SFP thresholds, confluence counts, RR
-   minimum, level density) until frequency is sane; each setting judged by
-   walk-forward out-of-sample, never by in-sample looks.
+2. **Tuning** — sweep SFP fractions, origin-wick cap, RR minimum (strategy.md §9
+   experiments in order); each setting judged by walk-forward out-of-sample,
+   never by in-sample looks.
 3. **Edge proof** — dozens-to-hundreds of trades, Sharpe CI above zero, deflated
    Sharpe surviving trial counts, sensitivity showing hills not spikes.
 4. **Paper trading** — live prices, fake money, weeks of proving live matches backtest.
