@@ -20,8 +20,16 @@ from websocket import create_connection
 
 log = logging.getLogger(__name__)
 
-WS_URL = "wss://data.tradingview.com/socket.io/websocket"
-WS_HEADERS = json.dumps({"Origin": "https://data.tradingview.com"})
+WS_URL = "wss://data.tradingview.com/socket.io/websocket?from=chart%2F&type=chart"
+WS_HEADERS = json.dumps(
+    {
+        "Origin": "https://www.tradingview.com",
+        "User-Agent": (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
+        ),
+    }
+)
 CHUNK = 5000
 
 
