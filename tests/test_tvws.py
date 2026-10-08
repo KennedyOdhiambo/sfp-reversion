@@ -2,7 +2,6 @@
 
 import pandas as pd
 
-from sfp_reversion.data import tvws
 from sfp_reversion.data.tvws import _frame, _series_bars, _split_frames, fetch_history
 
 
@@ -63,8 +62,6 @@ def test_paging_merges_dedupes_and_filters() -> None:
 
 
 def test_empty_feed_gives_empty_frame() -> None:
-    out = fetch_history(
-        "X", "60", delay=0.0, session_factory=lambda: _FakeSession([[]])
-    )
+    out = fetch_history("X", "60", delay=0.0, session_factory=lambda: _FakeSession([[]]))
     assert out.empty
     assert list(out.columns) == ["open", "high", "low", "close", "volume"]
