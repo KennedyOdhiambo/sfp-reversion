@@ -121,9 +121,7 @@ def run_backtest(
                         else None
                     ),
                 }
-                open_pos["units"] = (
-                    equity * params.risk_per_trade_pct / 100.0 / risk_dist
-                )
+                open_pos["units"] = equity * params.risk_per_trade_pct / 100.0 / risk_dist
                 break  # one position at a time
     if open_pos is not None:  # force-close at the final close
         signed = 1.0 if open_pos["direction"] == "long" else -1.0
@@ -143,7 +141,11 @@ def run_backtest(
     equity_at.iloc[0] = params.min_equity
     curve = equity_at.ffill()
     curve.name = "equity"
-    trades_df = pd.DataFrame(trades).drop(columns=["entry_idx", "sweep_extreme"]) if trades else empty_trades
+    trades_df = (
+        pd.DataFrame(trades).drop(columns=["entry_idx", "sweep_extreme"])
+        if trades
+        else empty_trades
+    )
     return BacktestResult(trades_df, curve)
 
 

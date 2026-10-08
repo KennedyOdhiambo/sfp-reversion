@@ -102,7 +102,10 @@ def test_no_warning_without_sweep_extreme() -> None:
 
 def test_costs_shift_fill_against_trader() -> None:
     pricey = BacktestParams(
-        spread_pips=10.0, slippage_pips=0.0, pip_size=0.0001, risk_per_trade_pct=1.0,
+        spread_pips=10.0,
+        slippage_pips=0.0,
+        pip_size=0.0001,
+        risk_per_trade_pct=1.0,
         min_equity=10000.0,
     )
     df = _frame(

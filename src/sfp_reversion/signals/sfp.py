@@ -102,7 +102,11 @@ def generate_sfp_signals(
         i0 = int(hourly.index.searchsorted(start))
         direction = "long" if level.kind == "support" else "short"
         sfp = detect_sfp(
-            hourly, level.price, direction, params.wick_atr, params.close_inside_atr,
+            hourly,
+            level.price,
+            direction,
+            params.wick_atr,
+            params.close_inside_atr,
             params.atr_period,
         )
         tol = params.touch_tolerance_atr * atr_h
@@ -112,9 +116,16 @@ def generate_sfp_signals(
                 continue
             if bool(sfp.iloc[p]):
                 sig = _try_signal(
-                    level, direction, hourly.index[p], float(closes[p]),
-                    float(highs[p]), float(lows[p]),
-                    a, resistances, supports, params,
+                    level,
+                    direction,
+                    hourly.index[p],
+                    float(closes[p]),
+                    float(highs[p]),
+                    float(lows[p]),
+                    a,
+                    resistances,
+                    supports,
+                    params,
                 )
                 if sig is not None:
                     rows.append(sig)

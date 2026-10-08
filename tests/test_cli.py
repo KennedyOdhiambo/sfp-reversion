@@ -45,12 +45,7 @@ def test_backtest(stubbed: None, capsys: pytest.CaptureFixture) -> None:
 
 
 def test_validate_sweep(stubbed: None, capsys: pytest.CaptureFixture) -> None:
-    assert (
-        main(
-            ["validate", "EUR_USD", "--parameter", "wick_atr", "--values", "0.05", "0.1"]
-        )
-        == 0
-    )
+    assert main(["validate", "EUR_USD", "--parameter", "wick_atr", "--values", "0.05", "0.1"]) == 0
     assert "wick_atr=" in capsys.readouterr().out
 
 
