@@ -36,6 +36,8 @@ class SfpParams:
     stop_buffer_atr: float = 0.1
     fta_fallback_atr: float = 2.0
     min_reward_risk: float = 1.0
+    refine_entry: bool = False
+    refine_expiry_bars: int = 12
 
     @classmethod
     def from_config(cls) -> SfpParams:
@@ -59,6 +61,8 @@ class SfpParams:
             stop_buffer_atr=float(sfp.get("stop_buffer_atr", 0.1)),
             fta_fallback_atr=float(sfp.get("fta_fallback_atr", 2.0)),
             min_reward_risk=float(sfp.get("min_reward_risk", 1.0)),
+            refine_entry=bool(sfp.get("refine_entry", False)),
+            refine_expiry_bars=int(sfp.get("refine_expiry_bars", 12)),
         )
 
 
@@ -74,6 +78,8 @@ SIGNAL_COLUMNS = [
     "close_atr_mult",
     "origin_wick_mult",
     "expected_r",
+    "entry_mode",
+    "expiry_bars",
 ]
 
 
@@ -175,12 +181,14 @@ def _try_signal(
     origin_mult = level.origin_wick_mult
     if params.max_origin_wick_atr > 0 and origin_mult > params.max_origin_wick_atr:
         return None  # messy shelf (origin wick in daily ATR at formation)
-    entry = close
     buf = params.stop_buffer_atr * atr
     if direction == "long":
         wick_mult = (level.price - low) / atr
         close_mult = (close - level.price) / atr
         stop = low - buf
+        # refined: limit buy at the level (better than the rejection close);
+        # unrefined: market at the close.
+        entry = level.price if params.refine_entry else close
         above = [r for r in resistances if r > entry]
         target = above[0] if above else entry + params.fta_fallback_atr * atr
         risk, reward = entry - stop, target - entry
@@ -189,6 +197,7 @@ def _try_signal(
         wick_mult = (high - level.price) / atr
         close_mult = (level.price - close) / atr
         stop = high + buf
+        entry = level.price if params.refine_entry else close
         below = [s for s in supports if s < entry]
         target = below[-1] if below else entry - params.fta_fallback_atr * atr
         risk, reward = stop - entry, entry - target
@@ -198,7 +207,7 @@ def _try_signal(
     return {
         "timestamp": ts,
         "direction": direction,
-        "entry_price": entry,
+        "entry_price": float(entry),
         "stop_price": float(stop),
         "target_price": float(target),
         "level_price": level.price,
@@ -207,6 +216,8 @@ def _try_signal(
         "close_atr_mult": float(close_mult),
         "origin_wick_mult": float(origin_mult),
         "expected_r": float(reward / risk),
+        "entry_mode": "limit" if params.refine_entry else "market",
+        "expiry_bars": float(params.refine_expiry_bars) if params.refine_entry else 0.0,
     }
 
 
@@ -244,6 +255,8 @@ def _empty_signals() -> pd.DataFrame:
             "close_atr_mult": pd.Series(dtype=float),
             "origin_wick_mult": pd.Series(dtype=float),
             "expected_r": pd.Series(dtype=float),
+            "entry_mode": pd.Series(dtype=object),
+            "expiry_bars": pd.Series(dtype=float),
         }
     )
     return out[SIGNAL_COLUMNS]

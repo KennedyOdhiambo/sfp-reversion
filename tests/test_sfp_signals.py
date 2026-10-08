@@ -118,3 +118,22 @@ def test_empty_signals_filter_by_timestamp() -> None:
     assert str(sig["timestamp"].dt.tz) == "UTC"
     filtered = sig[sig["timestamp"] >= hourly.index[50]]
     assert filtered.empty
+
+
+def test_refined_entry_limits_at_level_with_expiry() -> None:
+    hourly = _hourly(special={60: (1.0950, 1.0970, 1.0890, 1.0905)})
+    sig = generate_sfp_signals(hourly, _daily(), _params(refine_entry=True))
+    assert len(sig) == 1
+    row = sig.iloc[0]
+    assert row["entry_mode"] == "limit"
+    assert row["entry_price"] == 1.09  # the level, better than the 1.0905 close
+    assert row["expiry_bars"] == 12.0
+    assert row["expected_r"] > 1.0
+
+
+def test_market_entry_by_default() -> None:
+    hourly = _hourly(special={60: (1.0950, 1.0970, 1.0890, 1.0905)})
+    row = generate_sfp_signals(hourly, _daily(), _params()).iloc[0]
+    assert row["entry_mode"] == "market"
+    assert row["entry_price"] == 1.0905
+    assert row["expiry_bars"] == 0.0

@@ -55,6 +55,8 @@ sfp:
   stop_buffer_atr: 0.1       # stop beyond sweep extreme, in ATR
   fta_fallback_atr: 2.0      # target when no opposing level exists: entry +/- this x ATR
   min_reward_risk: 1.0       # skip if target distance < this x stop distance
+  refine_entry: false        # limit at level w/ 5m expiry instead of market at close
+  refine_expiry_bars: 12     # 5m bars before an unfilled refined limit expires
 
 backtest:
   spread_pips: 1.0
