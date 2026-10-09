@@ -34,7 +34,7 @@ def _parser() -> argparse.ArgumentParser:
     f.add_argument("--start", default=None, help="YYYY-MM-DD")
     f.add_argument("--end", default=None, help="YYYY-MM-DD")
 
-    s = sub.add_parser("signals", help="Generate signals (Setup A SFP / Setup B retest)")
+    s = sub.add_parser("signals", help="Generate signals")
     s.add_argument("pair")
     s.add_argument("--out", default=None, help="CSV output path")
     s.add_argument("--start", default=None, help="YYYY-MM-DD")

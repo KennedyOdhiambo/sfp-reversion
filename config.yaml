@@ -1,4 +1,4 @@
-# Setup A (SFP) — all tunable parameters live here, never in code.
+# All tunable parameters live here, never in code.
 # Judged by walk-forward OOS. Spec: strategy.md. Why: philosophy.md.
 
 data:
@@ -58,27 +58,6 @@ sfp:
   min_stop_atr: 0.25         # skip if stop distance < this x ATR (stops inside noise)
   refine_entry: false        # limit at level w/ 5m expiry instead of market at close
   refine_expiry_bars: 12     # 5m bars before an unfilled refined limit expires
-
-retest:                        # Setup B: breakout-then-return (independent path)
-  max_break_return_bars: 24    # return must come within this many H1 bars after the break
-  touch_gates:                 # pre-break touches -> required daily confirmations
-    "3": 0
-    "2": 1
-    "1": 2
-  pin_wick_body_ratio: 2.0     # pin wick must exceed body by this (daily bias pattern)
-  bias_sfp_wick_atr: 0.1       # daily swing-failure sweep, in daily ATR
-  bias_sfp_close_atr: 0.05     # daily swing-failure close back inside, in daily ATR
-  fib_lookback: 20             # daily bars for the deep high/low fib legs
-  fib_ratios: [0.382, 0.5, 0.618]
-  fib_proximity_atr: 0.2       # level within this of a fib = confirmation
-  special_fib_rule: true       # place limit at fib instead of raw level when close
-  atr_stretch_period: 20       # daily SMA/ATR window for stretch confirmation
-  atr_stretch_multiple: 1.0    # level this far from SMA20 = stretched
-  stop_buffer_atr: 0.1         # stop beyond return-bar extreme, in ATR
-  fta_fallback_atr: 2.0        # target when no opposing level exists
-  min_reward_risk: 1.0         # skip if target < this x stop distance
-  min_stop_atr: 0.25           # skip if stop distance < this x ATR (stops inside noise)
-  limit_expiry_bars: 24        # H1 bars before an unfilled return limit expires
 
 backtest:
   spread_pips: 1.0
