@@ -164,7 +164,10 @@ def filter_levels(
                 if not a > 0:
                     continue
                 tol = extreme_proximity_atr * a
-                if abs(lv.price - float(hi.loc[ts])) <= tol or abs(lv.price - float(lo.loc[ts])) <= tol:
+                if (
+                    abs(lv.price - float(hi.loc[ts])) <= tol
+                    or abs(lv.price - float(lo.loc[ts])) <= tol
+                ):
                     near = True
                     break
             if near:
@@ -173,7 +176,9 @@ def filter_levels(
     if min_spacing_atr > 0:
         yard = float(atr_series(daily, atr_period).median())
         if yard > 0:
-            ordered = sorted(out, key=lambda lv: (len(lv.swing_prices), -lv.origin_wick_mult), reverse=True)
+            ordered = sorted(
+                out, key=lambda lv: (len(lv.swing_prices), -lv.origin_wick_mult), reverse=True
+            )
             kept = []
             for lv in ordered:
                 if all(abs(lv.price - k.price) >= min_spacing_atr * yard for k in kept):
