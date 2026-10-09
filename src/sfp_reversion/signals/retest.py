@@ -190,12 +190,20 @@ def fib_override(
 
 
 def _return_episodes(
-    level: Any, hourly: pd.DataFrame, bpos: int, deadline: int, params: RetestParams
+    level: Any,
+    hourly: pd.DataFrame,
+    bpos: int,
+    deadline: int,
+    direction: str,
+    params: RetestParams,
 ) -> list[tuple[int, pd.Timestamp]]:
-    """First bar of each approach episode strictly after the break bar."""
+    """First bar of each return to the broken level: the bar must overlap the
+    tolerance band around the level AND close on the broken side (a bar that
+    closes back through has re-broken, not returned)."""
     atr = atr_series(hourly, params.atr_period).shift(1).to_numpy()
     highs = hourly["high"].to_numpy()
     lows = hourly["low"].to_numpy()
+    closes = hourly["close"].to_numpy()
     out: list[tuple[int, pd.Timestamp]] = []
     prev = -2
     for p in range(bpos + 1, deadline + 1):
@@ -203,17 +211,19 @@ def _return_episodes(
         if not tol > 0:
             prev = -2
             continue
-        if level.kind == "resistance":
-            touched = lows[p] <= level.price + tol
+        overlap = lows[p] <= level.price + tol and highs[p] >= level.price - tol
+        if direction == "long":
+            held = closes[p] >= level.price - tol
         else:
-            touched = highs[p] >= level.price - tol
-        if touched and p > prev + 1:
+            held = closes[p] <= level.price + tol
+        if overlap and held and p > prev + 1:
             out.append((p, hourly.index[p]))
-        prev = p if touched else -2
+        prev = p if (overlap and held) else -2
     return out
 
 
-def touch_episodes(    level: Any, hourly: pd.DataFrame, i0: int, tolerance_atr: float, atr_period: int
+def touch_episodes(
+    level: Any, hourly: pd.DataFrame, i0: int, tolerance_atr: float, atr_period: int
 ) -> tuple[list[list[int]], int | None]:
     """Approach episodes from ``i0`` and the first break-bar position (or None).
 
@@ -264,8 +274,6 @@ def generate_retest_signals(
     params: RetestParams | None = None,
 ) -> pd.DataFrame:
     """Breakout-then-return signals, one per level at most."""
-    from sfp_reversion.levels.detection import detect_levels
-
     params = params or RetestParams.from_config()
     levels = detect_levels(
         daily,
@@ -280,7 +288,6 @@ def generate_retest_signals(
     resistances = sorted(lv.price for lv in levels if lv.kind == "resistance")
     supports = sorted(lv.price for lv in levels if lv.kind == "support")
     atr_h = atr_series(hourly, params.atr_period).shift(1)
-    closes = hourly["close"].to_numpy()
     highs = hourly["high"].to_numpy()
     lows = hourly["low"].to_numpy()
 
@@ -290,7 +297,9 @@ def generate_retest_signals(
         if start is None or hourly.index[-1] < start:
             continue
         i0 = int(hourly.index.searchsorted(start))
-        episodes, bpos = touch_episodes(level, hourly, i0, params.touch_tolerance_atr, params.atr_period)
+        episodes, bpos = touch_episodes(
+            level, hourly, i0, params.touch_tolerance_atr, params.atr_period
+        )
         if bpos is None:
             continue  # never broke: not a Setup B level
         # break direction decides the trade (resistance broken up -> long)
@@ -302,7 +311,7 @@ def generate_retest_signals(
         required = params.touch_gates.get(min(touches, 3), 0)
         # first return episode strictly after the break, within the window
         deadline = min(bpos + params.max_break_return_bars, len(hourly) - 1)
-        returns = _return_episodes(level, hourly, bpos, deadline, params)
+        returns = _return_episodes(level, hourly, bpos, deadline, direction, params)
         for p, ret_ts in returns:
             factors = daily_confirmations(daily, level.price, direction, ret_ts, params)
             if len(factors) < required:
