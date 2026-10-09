@@ -117,8 +117,11 @@ def test_two_touch_needs_confirmation() -> None:
             55: (1.1490, 1.1510, 1.1498, 1.1500),
         }
     )
-    assert generate_retest_signals(hourly, _daily(), _params()).empty  # no pin on daily
-    sig = generate_retest_signals(hourly, _daily(pin=True), _params())
+    # stretch gate disabled to isolate the daily-pattern confirmation
+    assert generate_retest_signals(
+        hourly, _daily(), _params(atr_stretch_multiple=1e9)
+    ).empty  # no pin on daily
+    sig = generate_retest_signals(hourly, _daily(pin=True), _params(atr_stretch_multiple=1e9))
     assert len(sig) == 1
     assert sig.iloc[0]["touches"] == 2
     assert "d1_pattern" in sig.iloc[0]["confirmations"]
