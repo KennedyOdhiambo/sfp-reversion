@@ -96,7 +96,7 @@ def test_three_touch_break_return_trades_clean() -> None:
             11: (1.1480, 1.1498, 1.1380, 1.1480),
             30: (1.14, 1.1498, 1.1380, 1.1480),  # touch episode 2
             50: (1.14, 1.1510, 1.1380, 1.1505),  # break up
-            55: (1.1490, 1.1510, 1.1498, 1.1500),  # return within window
+            55: (1.1490, 1.1510, 1.1490, 1.1500),  # return within window
         }
     )
     sig = generate_retest_signals(hourly, _daily(), _params())
@@ -114,7 +114,7 @@ def test_two_touch_needs_confirmation() -> None:
         special={
             10: (1.14, 1.1498, 1.1380, 1.1480),
             50: (1.14, 1.1510, 1.1380, 1.1505),
-            55: (1.1490, 1.1510, 1.1498, 1.1500),
+            55: (1.1490, 1.1510, 1.1490, 1.1500),
         }
     )
     # stretch gate disabled to isolate the daily-pattern confirmation
@@ -134,7 +134,7 @@ def test_late_return_expires() -> None:
             10: (1.14, 1.1498, 1.1380, 1.1480),
             30: (1.14, 1.1498, 1.1380, 1.1480),
             50: (1.14, 1.1510, 1.1380, 1.1505),
-            90: (1.1490, 1.1510, 1.1498, 1.1500),  # 40 bars after break > 24
+            90: (1.1490, 1.1510, 1.1490, 1.1500),  # 40 bars after break > 24
         },
     )
     assert generate_retest_signals(hourly, _daily(), _params()).empty

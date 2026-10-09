@@ -7,7 +7,11 @@ from sfp_reversion.backtest.engine import BacktestParams, run_backtest
 from sfp_reversion.data.schema import validate_ohlc
 
 FREE = BacktestParams(
-    spread_pips=0.0, slippage_pips=0.0, risk_per_trade_pct=1.0, min_equity=10000.0
+    spread_pips=0.0,
+    slippage_pips=0.0,
+    exit_slippage_pips=0.0,
+    risk_per_trade_pct=1.0,
+    min_equity=10000.0,
 )
 
 
@@ -181,3 +185,25 @@ def test_limit_fills_on_touch_and_expires_otherwise() -> None:
     )
     res2 = run_backtest(df2, _limit_sig(df2.index[0], 1.0950, 1.1100, expiry=2), FREE)
     assert res2.trades_df.empty  # never touched within expiry: no trade
+
+
+def test_exit_slippage_applies_adversely() -> None:
+    pricey_exit = BacktestParams(
+        spread_pips=0.0,
+        slippage_pips=0.0,
+        exit_slippage_pips=10.0,
+        pip_size=0.0001,
+        risk_per_trade_pct=1.0,
+        min_equity=10000.0,
+    )
+    df = _frame(
+        [
+            (1.1000, 1.1010, 1.0990, 1.1000),
+            (1.1000, 1.1120, 1.0990, 1.1110),
+            (1.1110, 1.1120, 1.1100, 1.1110),
+        ]
+    )
+    res = run_backtest(df, _sig(df.index[0], "long", 1.0950, 1.1100), pricey_exit)
+    t = res.trades_df.iloc[0]
+    assert t["exit_price"] == pytest.approx(1.1100 - 0.0010)  # target minus 10-pip slip
+    assert t["pnl"] == pytest.approx((1.1090 - 1.1000) * t["units"])

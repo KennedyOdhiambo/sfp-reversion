@@ -44,6 +44,7 @@ class RetestParams:
     stop_buffer_atr: float = 0.1
     fta_fallback_atr: float = 2.0
     min_reward_risk: float = 1.0
+    min_stop_atr: float = 0.25
     limit_expiry_bars: int = 24
 
     @classmethod
@@ -73,6 +74,7 @@ class RetestParams:
             stop_buffer_atr=float(ret.get("stop_buffer_atr", 0.1)),
             fta_fallback_atr=float(ret.get("fta_fallback_atr", 2.0)),
             min_reward_risk=float(ret.get("min_reward_risk", 1.0)),
+            min_stop_atr=float(ret.get("min_stop_atr", 0.25)),
             limit_expiry_bars=int(ret.get("limit_expiry_bars", 24)),
         )
 
@@ -339,6 +341,8 @@ def generate_retest_signals(
                 extreme = float(highs[p])
             if not risk > 0 or reward < params.min_reward_risk * risk:
                 continue
+            if params.min_stop_atr > 0 and risk < params.min_stop_atr * a:
+                continue  # stop inside noise: leverage fantasy, skip
             rows.append(
                 {
                     "timestamp": ret_ts,

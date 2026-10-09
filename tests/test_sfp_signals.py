@@ -137,3 +137,10 @@ def test_market_entry_by_default() -> None:
     assert row["entry_mode"] == "market"
     assert row["entry_price"] == 1.0905
     assert row["expiry_bars"] == 0.0
+
+
+def test_min_stop_filter_skips_noise_stops() -> None:
+    hourly = _hourly(special={60: (1.0950, 1.0970, 1.0890, 1.0905)})
+    # stop 0.0019 vs ATR 0.004 ~= 0.48x: passes 0.25x, fails 0.5x
+    assert not generate_sfp_signals(hourly, _daily(), _params(min_stop_atr=0.25)).empty
+    assert generate_sfp_signals(hourly, _daily(), _params(min_stop_atr=0.5)).empty

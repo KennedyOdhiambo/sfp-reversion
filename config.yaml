@@ -55,6 +55,7 @@ sfp:
   stop_buffer_atr: 0.1       # stop beyond sweep extreme, in ATR
   fta_fallback_atr: 2.0      # target when no opposing level exists: entry +/- this x ATR
   min_reward_risk: 1.0       # skip if target distance < this x stop distance
+  min_stop_atr: 0.25         # skip if stop distance < this x ATR (stops inside noise)
   refine_entry: false        # limit at level w/ 5m expiry instead of market at close
   refine_expiry_bars: 12     # 5m bars before an unfilled refined limit expires
 
@@ -76,11 +77,13 @@ retest:                        # Setup B: breakout-then-return (independent path
   stop_buffer_atr: 0.1         # stop beyond return-bar extreme, in ATR
   fta_fallback_atr: 2.0        # target when no opposing level exists
   min_reward_risk: 1.0         # skip if target < this x stop distance
+  min_stop_atr: 0.25           # skip if stop distance < this x ATR (stops inside noise)
   limit_expiry_bars: 24        # H1 bars before an unfilled return limit expires
 
 backtest:
   spread_pips: 1.0
   slippage_pips: 0.5
+  exit_slippage_pips: 1.0    # adverse fill on stop/target/warning exits
   pip_size: 0.0001
   risk_per_trade_pct: 1.0    # fixed-fractional risk per trade; one position at a time
   min_equity: 10000          # starting equity

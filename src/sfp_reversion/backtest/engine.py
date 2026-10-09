@@ -22,6 +22,7 @@ from sfp_reversion.config import get_config
 class BacktestParams:
     spread_pips: float = 1.0
     slippage_pips: float = 0.5
+    exit_slippage_pips: float = 1.0
     pip_size: float = 0.0001
     risk_per_trade_pct: float = 1.0
     min_equity: float = 10000.0
@@ -33,6 +34,7 @@ class BacktestParams:
         return cls(
             spread_pips=float(bt.get("spread_pips", 1.0)),
             slippage_pips=float(bt.get("slippage_pips", 0.5)),
+            exit_slippage_pips=float(bt.get("exit_slippage_pips", 1.0)),
             pip_size=float(bt.get("pip_size", 0.0001)),
             risk_per_trade_pct=float(bt.get("risk_per_trade_pct", 1.0)),
             min_equity=float(bt.get("min_equity", 10000)),
@@ -73,6 +75,7 @@ def run_backtest(
         return BacktestResult(empty_trades, pd.Series(params.min_equity, index=df.index))
     by_bar = {ts: grp for ts, grp in signals.groupby("timestamp")}
     cost = (params.spread_pips + params.slippage_pips) * params.pip_size
+    exit_cost = params.exit_slippage_pips * params.pip_size
 
     equity = float(params.min_equity)
     equity_at = pd.Series(float("nan"), index=df.index)
@@ -83,7 +86,7 @@ def run_backtest(
         ts = df.index[i]
         bar = df.iloc[i]
         if open_pos is not None:
-            outcome = _check_exit(open_pos, bar, i, max_hold)
+            outcome = _check_exit(open_pos, bar, i, max_hold, exit_cost)
             if outcome is not None:
                 exit_price, reason = outcome
                 signed = 1.0 if open_pos["direction"] == "long" else -1.0
@@ -180,22 +183,22 @@ def _limit_fill(
 
 
 def _check_exit(
-    pos: dict[str, Any], bar: pd.Series, i: int, max_hold_bars: int
+    pos: dict[str, Any], bar: pd.Series, i: int, max_hold_bars: int, exit_cost: float = 0.0
 ) -> tuple[float, str] | None:
     if pos["direction"] == "long":
         if bar["low"] <= pos["stop_price"]:
-            return pos["stop_price"], "stop"
+            return pos["stop_price"] - exit_cost, "stop"
         if bar["high"] >= pos["target_price"]:
-            return pos["target_price"], "target"
+            return pos["target_price"] - exit_cost, "target"
         if pos["sweep_extreme"] is not None and bar["close"] < pos["sweep_extreme"]:
-            return float(bar["close"]), "warning"
+            return float(bar["close"]) - exit_cost, "warning"
     else:
         if bar["high"] >= pos["stop_price"]:
-            return pos["stop_price"], "stop"
+            return pos["stop_price"] + exit_cost, "stop"
         if bar["low"] <= pos["target_price"]:
-            return pos["target_price"], "target"
+            return pos["target_price"] + exit_cost, "target"
         if pos["sweep_extreme"] is not None and bar["close"] > pos["sweep_extreme"]:
-            return float(bar["close"]), "warning"
+            return float(bar["close"]) + exit_cost, "warning"
     if i - pos["entry_idx"] >= max_hold_bars:
         return float(bar["close"]), "timeout"
     return None

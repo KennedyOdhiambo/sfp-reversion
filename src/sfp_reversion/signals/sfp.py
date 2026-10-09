@@ -36,6 +36,7 @@ class SfpParams:
     stop_buffer_atr: float = 0.1
     fta_fallback_atr: float = 2.0
     min_reward_risk: float = 1.0
+    min_stop_atr: float = 0.25
     refine_entry: bool = False
     refine_expiry_bars: int = 12
 
@@ -61,6 +62,7 @@ class SfpParams:
             stop_buffer_atr=float(sfp.get("stop_buffer_atr", 0.1)),
             fta_fallback_atr=float(sfp.get("fta_fallback_atr", 2.0)),
             min_reward_risk=float(sfp.get("min_reward_risk", 1.0)),
+            min_stop_atr=float(sfp.get("min_stop_atr", 0.25)),
             refine_entry=bool(sfp.get("refine_entry", False)),
             refine_expiry_bars=int(sfp.get("refine_expiry_bars", 12)),
         )
@@ -204,6 +206,8 @@ def _try_signal(
         extreme = high
     if not risk > 0 or reward < params.min_reward_risk * risk:
         return None
+    if params.min_stop_atr > 0 and risk < params.min_stop_atr * atr:
+        return None  # stop inside noise: leverage fantasy, skip
     return {
         "timestamp": ts,
         "direction": direction,
