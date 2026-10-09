@@ -46,7 +46,8 @@ def run_portfolio(
     per_symbol: dict[str, pd.DataFrame] = {}
     for symbol, (hourly, daily) in frames.items():
         sig = generate(hourly, daily, signal_params)
-        res = run_backtest(exec_frames.get(symbol, hourly), sig, backtest_params)
+        bt = backtest_params or BacktestParams.from_config(symbol)
+        res = run_backtest(exec_frames.get(symbol, hourly), sig, bt)
         trades = res.trades_df.copy()
         trades["symbol"] = symbol
         per_symbol[symbol] = trades

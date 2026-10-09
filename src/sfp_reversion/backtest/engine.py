@@ -29,13 +29,17 @@ class BacktestParams:
     max_hold_bars: int = 120
 
     @classmethod
-    def from_config(cls) -> BacktestParams:
+    def from_config(cls, pair: str | None = None) -> BacktestParams:
         bt = get_config().section("backtest")
+        sizes = bt.get("pip_sizes", {})
+        pip_size = float(sizes.get(pair, bt.get("pip_size", 0.0001))) if pair else float(
+            bt.get("pip_size", 0.0001)
+        )
         return cls(
             spread_pips=float(bt.get("spread_pips", 1.0)),
             slippage_pips=float(bt.get("slippage_pips", 0.5)),
             exit_slippage_pips=float(bt.get("exit_slippage_pips", 1.0)),
-            pip_size=float(bt.get("pip_size", 0.0001)),
+            pip_size=pip_size,
             risk_per_trade_pct=float(bt.get("risk_per_trade_pct", 1.0)),
             min_equity=float(bt.get("min_equity", 10000)),
             max_hold_bars=int(bt.get("max_hold_bars", 120)),

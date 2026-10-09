@@ -84,7 +84,13 @@ backtest:
   spread_pips: 1.0
   slippage_pips: 0.5
   exit_slippage_pips: 1.0    # adverse fill on stop/target/warning exits
-  pip_size: 0.0001
+  pip_size: 0.0001           # default for 5-digit FX; per-pair overrides below
+  pip_sizes:                 # price units of one pip per pair
+    USD_JPY: 0.01
+    XAU_USD: 0.1
+    XAG_USD: 0.01
+    WTI_USD: 0.01
+    BTC_USD: 1.0
   risk_per_trade_pct: 1.0    # fixed-fractional risk per trade; one position at a time
   min_equity: 10000          # starting equity
   max_hold_bars: 120         # timeout exit, bars after entry

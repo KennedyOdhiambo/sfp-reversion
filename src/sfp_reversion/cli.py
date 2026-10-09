@@ -129,7 +129,7 @@ def _cmd_backtest(args: argparse.Namespace) -> int:
     cfg = get_config()
     hourly, daily = _frames(args.pair)
     sig_params, generate = _signal_fn(args.setup)
-    params = BacktestParams.from_config()
+    params = BacktestParams.from_config(args.pair)
     sig = _in_window(generate(hourly, daily, sig_params), args.start, args.end)
     exec_df = _exec_frame(args.pair, sig_params)
     res = run_backtest(exec_df, sig, params)
@@ -148,7 +148,7 @@ def _cmd_validate(args: argparse.Namespace) -> int:
     wf = cfg.section("validation").get("walk_forward", {})
     hourly, daily = _frames(args.pair)
     params, generate = _signal_fn(args.setup)
-    bt = BacktestParams.from_config()
+    bt = BacktestParams.from_config(args.pair)
 
     if args.parameter:
         values = args.values or [0.05, 0.1, 0.15, 0.2]
