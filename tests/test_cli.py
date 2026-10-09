@@ -38,6 +38,11 @@ def test_signals(stubbed: None, capsys: pytest.CaptureFixture) -> None:
     assert "signals" in capsys.readouterr().out
 
 
+def test_signals_setup_b(stubbed: None, capsys: pytest.CaptureFixture) -> None:
+    assert main(["signals", "EUR_USD", "--setup", "B"]) == 0
+    assert "signals" in capsys.readouterr().out
+
+
 def test_backtest(stubbed: None, capsys: pytest.CaptureFixture) -> None:
     assert main(["backtest", "EUR_USD", "--n-baseline", "2", "--out-dir", "rep"]) == 0
     out = capsys.readouterr().out

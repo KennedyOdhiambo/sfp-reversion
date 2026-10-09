@@ -15,6 +15,7 @@ import pandas as pd
 
 from sfp_reversion.backtest.engine import BacktestParams, run_backtest
 from sfp_reversion.report.metrics_table import metrics_table
+from sfp_reversion.signals.retest import RetestParams, generate_retest_signals
 from sfp_reversion.signals.sfp import SfpParams, generate_sfp_signals
 from sfp_reversion.validation.significance import significance_report
 
@@ -30,17 +31,21 @@ class PortfolioResult:
 
 def run_portfolio(
     frames: dict[str, tuple[pd.DataFrame, pd.DataFrame]],
-    signal_params: SfpParams | None = None,
+    signal_params: SfpParams | RetestParams | None = None,
     backtest_params: BacktestParams | None = None,
     starting_equity: float = 10000.0,
     exec_frames: dict[str, pd.DataFrame] | None = None,
 ) -> PortfolioResult:
-    signal_params = signal_params or SfpParams.from_config()
+    if signal_params is None:
+        signal_params = SfpParams.from_config()
+    generate = (
+        generate_retest_signals if isinstance(signal_params, RetestParams) else generate_sfp_signals
+    )
     backtest_params = backtest_params or BacktestParams.from_config()
     exec_frames = exec_frames or {}
     per_symbol: dict[str, pd.DataFrame] = {}
     for symbol, (hourly, daily) in frames.items():
-        sig = generate_sfp_signals(hourly, daily, signal_params)
+        sig = generate(hourly, daily, signal_params)
         res = run_backtest(exec_frames.get(symbol, hourly), sig, backtest_params)
         trades = res.trades_df.copy()
         trades["symbol"] = symbol
