@@ -93,7 +93,7 @@ def _signal_fn(setup: str):
 
 def _exec_frame(pair: str, params) -> tuple:
     """Execution frame: M5 when refining entries, else H1."""
-    if params.refine_entry:
+    if getattr(params, "refine_entry", False):
         return load_ohlc(pair, granularity="M5")
     return load_ohlc(pair, granularity="H1")
 
